@@ -4,17 +4,21 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Image, Text, View } from "react-native";
 
+// Corrected TabIcon component
 const TabIcon = ({ focused, icon, title }: any) => {
   return focused ? (
-    // Removed the unnecessary Fragment <>...</>
-    <View className="flex flex-col w-full flex-1 min-w-[112px] min-h-16 mt-9 justify-center items-center rounded-full overflow-hidden bg-secondary">
+    <View className="flex flex-col w-full flex-1 min-w-[70px] min-h-[70px] mt-9 justify-center items-center rounded-full overflow-hidden bg-light-100">
       <Image source={icon} tintColor="#151312" className="size-5" />
-      <Text className="text-primary text-base font-semibold ml-2">{title}</Text>
+      {/* Removed ml-2, added mt-1 for spacing */}
+      <Text className="text-darkbg text-base font-semibold mt-1">{title}</Text>
     </View>
   ) : (
-    <View className="size-full flex-1  min-w-[112px] justify-center items-center mt-9 min-h-16 rounded-full">
+    <View className="flex flex-col w-full flex-1 min-w-[70px] min-h-[70px] mt-9 justify-center items-center rounded-full overflow-hidden ">
       <Image source={icon} tintColor="#A8B5DB" className="size-5" />
-      <Text className="text-primary text-base font-semibold ml-2">{title}</Text>
+      {/* Removed ml-2, added mt-1 for spacing */}
+      <Text className="text-light-100 text-base font-semibold mt-1">
+        {title}
+      </Text>
     </View>
   );
 };
@@ -31,14 +35,15 @@ const _layout = () => {
           alignItems: "center",
         },
         tabBarStyle: {
-          backgroundColor: "#FCF7F4",
+          backgroundColor: "#1F62FF",
           borderRadius: 50,
           marginHorizontal: 20,
           marginBottom: 36,
           height: 70,
           position: "absolute",
-          borderWidth: 1,
-          borderColor: "#0F0D23", // Corrected hex color: added '#'
+          // These justify-content and align-items here apply to the *tab bar itself*,
+          // not the individual TabIcon content. The TabIcon's internal centering
+          // is handled by its own flexbox styles.
           justifyContent: "center",
           alignItems: "center",
         },
@@ -61,7 +66,7 @@ const _layout = () => {
           title: "Bus",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.save} title="Bus" />
+            <TabIcon focused={focused} icon={icons.bus} title="Bus" />
           ),
         }}
       />
@@ -71,7 +76,17 @@ const _layout = () => {
           title: "Child",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.person} title="Child" />
+            <TabIcon focused={focused} icon={icons.child} title="Child" />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.person} title="Profile" />
           ),
         }}
       />
