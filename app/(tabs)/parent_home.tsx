@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps"; // Import MapView, Marker, and PROVIDER_GOOGLE
 import { SafeAreaView } from "react-native-safe-area-context";
-import Header from "./header";
+import Header from "../Components/header"; // Import the Header component
 
 // Get screen dimensions for responsive map sizing
 const { width, height } = Dimensions.get("window");
@@ -107,7 +107,7 @@ const ParentHome = () => {
     }
   }
 
-  //button component
+  // Button Component
   const Button = ({
     title,
     onPress,
@@ -117,14 +117,17 @@ const ParentHome = () => {
     onPress: () => void;
     bgColor?: string;
   }) => (
+    // Key change: Removed 'm-auto' and 'flex' which could conflict with w-[48%]
+    // Added 'flex-shrink-0' to prevent shrinking if content gets too large
     <TouchableOpacity
-      className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 text-center justify-center flex items-center m-auto "
+      className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
       style={
         bgColor ? { backgroundColor: bgColor } : { backgroundColor: "#d2d2d2" }
       }
       onPress={onPress}
     >
-      <Text className="text-xl font-normal text-grayText mb-2 text-center ">
+      {/* Ensure Text is centered if button itself is fixed width */}
+      <Text className="text-xl font-normal text-grayText text-center">
         {title}
       </Text>
     </TouchableOpacity>

@@ -2,6 +2,7 @@ import arrow from "@/assets/icons/arrow.png";
 import bus from "@/assets/icons/bus.png";
 import child from "@/assets/icons/child.png";
 import copy from "@/assets/icons/copy.png";
+import edit from "@/assets/icons/edit.png";
 import home from "@/assets/icons/home.png";
 import notification from "@/assets/icons/notification.png";
 import person from "@/assets/icons/person.png";
@@ -24,4 +25,5 @@ export const icons = {
   bus,
   notification,
   copy,
+  edit,
 };
