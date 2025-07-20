@@ -1,5 +1,11 @@
 import React from "react";
-import { SafeAreaView, ScrollView, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 import Header from "../Components/header"; // Assuming this path is correct
 
@@ -12,7 +18,31 @@ const Bus = () => {
     { name: "Jane Smith", rating: "4.8 / 5", isPrimary: false },
     { name: "Alice Johnson", rating: "4.6 / 5", isPrimary: false },
   ];
-
+  // Button Component
+  const Button = ({
+    title,
+    onPress,
+    bgColor,
+  }: {
+    title: string;
+    onPress: () => void;
+    bgColor?: string;
+  }) => (
+    // Key change: Removed 'm-auto' and 'flex' which could conflict with w-[48%]
+    // Added 'flex-shrink-0' to prevent shrinking if content gets too large
+    <TouchableOpacity
+      className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
+      style={
+        bgColor ? { backgroundColor: bgColor } : { backgroundColor: "#d2d2d2" }
+      }
+      onPress={onPress}
+    >
+      {/* Ensure Text is centered if button itself is fixed width */}
+      <Text className="text-xl font-normal text-grayText text-center">
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       {/* Main scrollable content area */}
@@ -45,7 +75,7 @@ const Bus = () => {
             </Text>
           </View>
         </View>
-        <View className="flex-col mt-12 border-t border-grayText pt-4">
+        <View className="flex-col mt-4 border-t border-grayText pt-4">
           <Text className="text-xl font-light">Driver List</Text>
           <View className="flex-col mt-4">
             <View className="flex-col">
@@ -75,7 +105,7 @@ const Bus = () => {
             </View>
           </View>
         </View>
-        <View className="flex-col mt-12 border-t border-grayText pt-4">
+        <View className="flex-col mt-4 border-t border-b pb-4 border-grayText pt-4">
           <Text className="text-xl font-light">Contact Info</Text>
           <View className="flex-col mt-4">
             <Text className="text-lg text-grayText font-light">
@@ -91,6 +121,30 @@ const Bus = () => {
               no 1, Road Name, city, state
             </Text>
           </View>
+        </View>
+        <View className="flex-row flex-wrap justify-between mt-12 w-full">
+          {/* loop  */}
+          <Button
+            title="Notify Driver"
+            onPress={() => console.log("Notify Driver Pressed")}
+            bgColor="#F8B959"
+          />
+          <Button
+            title="Complaint"
+            onPress={() => console.log("Complaint Pressed")}
+            bgColor="#F85959"
+          />
+
+          <Button
+            title="Add Child"
+            onPress={() => console.log("Add Child Pressed")}
+            bgColor="#A9C9FB"
+          />
+          <Button
+            title="Rate Driver"
+            onPress={() => console.log("Rate Driver Pressed")}
+            bgColor="#F292F1"
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
