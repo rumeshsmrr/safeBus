@@ -5,8 +5,14 @@ import Header from "../Components/header"; // Assuming this path is correct
 
 const scrollViewBottomPadding = 24; // Define the padding value
 
-const Bought = () => {
-  // Renamed to PascalCase for consistency
+const Bus = () => {
+  const driverList = [
+    { name: "Madusha Nayajith", rating: "4.7 / 5", isPrimary: true },
+    { name: "John Doe", rating: "4.5 / 5", isPrimary: false },
+    { name: "Jane Smith", rating: "4.8 / 5", isPrimary: false },
+    { name: "Alice Johnson", rating: "4.6 / 5", isPrimary: false },
+  ];
+
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       {/* Main scrollable content area */}
@@ -40,12 +46,55 @@ const Bought = () => {
           </View>
         </View>
         <View className="flex-col mt-12 border-t border-grayText pt-4">
-          <Text className="font-light text-grayText">Destination</Text>
-          <Text className="font-light text-grayText">Estimated Arrival</Text>
+          <Text className="text-xl font-light">Driver List</Text>
+          <View className="flex-col mt-4">
+            <View className="flex-col">
+              {driverList.map((driver) => (
+                <View
+                  key={driver.name}
+                  className="flex-row py-2"
+                  style={{ alignItems: "center" }}
+                >
+                  <View className="flex-1">
+                    <Text className="text-lg text-grayText font-light">
+                      {driver.isPrimary ? "Primary Driver" : "Secondary Driver"}
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lg text-grayText font-light">
+                      {driver.name}
+                    </Text>
+                  </View>
+                  <View className="flex-1 items-end">
+                    <Text className="text-lg text-grayText font-light">
+                      {driver.rating}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+        <View className="flex-col mt-12 border-t border-grayText pt-4">
+          <Text className="text-xl font-light">Contact Info</Text>
+          <View className="flex-col mt-4">
+            <Text className="text-lg text-grayText font-light">
+              Madusha Nayajith
+            </Text>
+            <Text className="text-lg text-grayText font-light">
+              077 123 4567
+            </Text>
+            <Text className="text-lg text-grayText font-light">
+              madusha@example.com
+            </Text>
+            <Text className="text-lg text-grayText font-light">
+              no 1, Road Name, city, state
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-export default Bought;
+export default Bus;
