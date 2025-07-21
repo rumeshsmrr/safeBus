@@ -1,3 +1,5 @@
+import { icons } from "@/constants/icons";
+import { images } from "@/constants/images";
 import React from "react";
 import {
   Image,
@@ -8,13 +10,12 @@ import {
   View,
 } from "react-native";
 
-import { icons } from "@/constants/icons";
-import { images } from "@/constants/images";
-import Header from "../Components/header"; // Assuming this path is correct
+import Header2 from "./Components/header2";
 
 const scrollViewBottomPadding = 24; // Define the padding value
 
 interface Child {
+  id: string;
   name: string;
   isLinked: boolean;
   image: any; // Use the appropriate type for your image
@@ -30,40 +31,26 @@ interface Child {
   };
 }
 
-interface NewRequest {
-  name: string;
-  isLinked: boolean;
-  image: any; // Use the appropriate type for your image
-}
-
-const Child = () => {
-  const tempImage = images.childImage1;
-  const childList = [
-    {
-      name: "Shenuki Dilsara",
-      isLinked: true,
-      image: tempImage,
-      homeLocation: {
-        latitude: 6.8856,
-        longitude: 79.8596,
-        address: "Wattegedara, Maharagama, Sri Lanka",
-      },
-      schoolLocation: {
-        latitude: 6.9271,
-        longitude: 79.8612,
-        address: "Maradana, Sri Lanka",
-      },
-    },
-  ];
-
-  const newRequest = {
-    name: "Shemina Mansith",
-    isLinked: false,
+const tempImage = images.childImage1; // Replace with actual image path
+const selectedChild: Child[] = [
+  {
+    id: "1",
+    name: "Shenuki Dilsara",
+    isLinked: true,
     image: tempImage,
-  };
-
-  // const newRequest: NewRequest | null = null; // Set to null if no new request
-
+    homeLocation: {
+      latitude: 6.8856,
+      longitude: 79.8596,
+      address: "Wattegedara, Maharagama, Sri Lanka",
+    },
+    schoolLocation: {
+      latitude: 6.9271,
+      longitude: 79.8612,
+      address: "Maradana, Sri Lanka",
+    },
+  },
+];
+const NotifyDriverScreen = () => {
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       {/* Main scrollable content area */}
@@ -74,21 +61,19 @@ const Child = () => {
           paddingBottom: scrollViewBottomPadding,
         }}
       >
-        {/* Pass the prop if your Header expects it, otherwise remove */}
-        <Header isCode={false} />
-
+        <Header2 />
         <Text className="text-2xl font-light mt-4">My Child</Text>
         <Text className="text-xl font-light mt-4 ">Connected Child</Text>
         <View className="flex-col gap-2 pt-4">
-          {childList.map((child, index) => (
-            <View
+          {selectedChild.map((child: Child, index: number) => (
+            <TouchableOpacity
               key={index}
               className="flex-col  gap-4 bg-white p-4 rounded-lg shadow"
             >
               <View className="flex-row items-center gap-4">
                 <Image
                   source={child.image}
-                  className="h-12 w-12 rounded-full"
+                  style={{ height: 48, width: 48, borderRadius: 24 }}
                 />
                 <View className="flex-1">
                   <Text className="text-lg font-semibold">{child.name}</Text>
@@ -103,7 +88,7 @@ const Child = () => {
                   <View className="flex-row gap-2">
                     <Image
                       source={icons.homeLocationIcon}
-                      className="h-4 w-4"
+                      style={{ height: 16, width: 16 }}
                     />
                     <Text className="text-sm text-grayText">
                       {child.homeLocation.address}
@@ -120,7 +105,7 @@ const Child = () => {
                   <View className="flex-row gap-2">
                     <Image
                       source={icons.schoolLocationIcon}
-                      className="h-4 w-4"
+                      style={{ height: 16, width: 16 }}
                     />
                     <Text className="text-sm text-grayText">
                       {child.schoolLocation.address}
@@ -133,49 +118,13 @@ const Child = () => {
                   </View>
                 </View>
               </View>
-              <View className="flex-row justify-between gap-2 border-t border-gray-200 pt-2">
-                <TouchableOpacity
-                  className="bg-redsh py-2 px-4 min-w-[80px]  rounded-lg"
-                  onPress={() => console.log("Remove Pressed")}
-                >
-                  <Text className="text-white text-center">Remove</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="bg-blue-500 py-2 px-4 min-w-[80px] rounded-lg"
-                  onPress={() => console.log("Edit Pressed")}
-                >
-                  <Text className="text-white text-center">Edit</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
-        <Text className="text-xl font-light mt-4 ">New Link Request</Text>
-        <View className="flex-col gap-4 pt-4">
-          {newRequest ? (
-            <View className="flex-row items-center gap-4 bg-white p-4 rounded-lg shadow">
-              <Image
-                source={newRequest.image}
-                className="h-12 w-12 rounded-full"
-              />
-              <View className="flex-1">
-                <Text className="text-lg font-semibold">{newRequest.name}</Text>
-                <Text className="text-sm text-blue-700 font-light">
-                  {newRequest.isLinked ? "Linked to Bus" : "Not Linked to Bus"}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View className="flex-row items-center gap-4 bg-white p-4 rounded-lg shadow">
-              <Text className="text-lg font-semibold text-gray-500">
-                No new link requests
-              </Text>
-            </View>
-          )}
-        </View>
+        {/* form. input with date, predifined messages  */}
+        <View className="mt-6"></View>
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-export default Child;
+export default NotifyDriverScreen;

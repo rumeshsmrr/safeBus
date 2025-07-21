@@ -1,4 +1,6 @@
 import { images } from "@/constants/images";
+// import { useNavigation } from "@react-navigation/native"; // REMOVE THIS
+import { useRouter } from "expo-router"; // IMPORT useRouter
 import React from "react";
 import {
   Dimensions,
@@ -20,6 +22,8 @@ const LATITUDE_DELTA = 0.0922; // Standard delta for a city view
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 
 const ParentHome = () => {
+  const router = useRouter(); // Initialize router
+
   const driver = {
     id: 1,
     name: "Madusha",
@@ -112,26 +116,39 @@ const ParentHome = () => {
     title,
     onPress,
     bgColor,
+    navigateTo,
   }: {
     title: string;
-    onPress: () => void;
+    onPress?: () => void;
     bgColor?: string;
-  }) => (
-    // Key change: Removed 'm-auto' and 'flex' which could conflict with w-[48%]
-    // Added 'flex-shrink-0' to prevent shrinking if content gets too large
-    <TouchableOpacity
-      className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
-      style={
-        bgColor ? { backgroundColor: bgColor } : { backgroundColor: "#d2d2d2" }
+    navigateTo?: string;
+  }) => {
+    // const navigation = useNavigation(); // No longer needed here if using router.push
+
+    const handlePress = () => {
+      if (navigateTo) {
+        router.push(navigateTo as any); // Use router.push for navigation
+      } else if (onPress) {
+        onPress();
       }
-      onPress={onPress}
-    >
-      {/* Ensure Text is centered if button itself is fixed width */}
-      <Text className="text-xl font-normal text-grayText text-center">
-        {title}
-      </Text>
-    </TouchableOpacity>
-  );
+    };
+
+    return (
+      <TouchableOpacity
+        className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
+        style={
+          bgColor
+            ? { backgroundColor: bgColor }
+            : { backgroundColor: "#d2d2d2" }
+        }
+        onPress={handlePress}
+      >
+        <Text className="text-xl font-normal text-grayText text-center">
+          {title}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-light-100">
@@ -247,26 +264,24 @@ const ParentHome = () => {
         </View>
 
         <View className="flex-row flex-wrap justify-between mt-6 w-full">
-          {/* loop  */}
           <Button
             title="Notify Driver"
-            onPress={() => console.log("Notify Driver Pressed")}
+            navigateTo="NotifyDriverScreen" // Ensure this matches the file name in `app/`
             bgColor="#F8B959"
           />
           <Button
             title="Buddy System"
-            onPress={() => console.log("Buddy System Pressed")}
+            navigateTo="BuddySystemScreen" // Assuming you create this file in `app/`
             bgColor="#F292F1"
           />
-
           <Button
             title="Lost & Found"
-            onPress={() => console.log("Lost & Found Pressed")}
+            navigateTo="LostFoundScreen" // Assuming you create this file in `app/`
             bgColor="#A9C9FB"
           />
           <Button
             title="Chat Bot"
-            onPress={() => console.log("Notify Driver Pressed")}
+            navigateTo="ChatBotScreen" // Assuming you create this file in `app/`
             bgColor="#129489"
           />
         </View>
