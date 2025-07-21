@@ -9,6 +9,7 @@ export default function RootLayout() {
         name="NotifyDriverScreen"
         options={{ headerShown: false }}
       />
+      <Stack.Screen name="EmergencyScreen" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );

@@ -258,7 +258,10 @@ const ParentHome = () => {
               )}
             </MapView>
           </View>
-          <TouchableOpacity className="w-[160px] h-[160px] bg-redsh rounded-xl shadow-md p-4 items-center justify-center ml-2">
+          <TouchableOpacity
+            className="w-[160px] h-[160px] bg-redsh rounded-xl shadow-md p-4 items-center justify-center ml-2"
+            onPress={() => router.push("/EmergencyScreen")} // Navigate to Emergency Screen
+          >
             <Text className="text-xl text-grayText font-bold">Emergency</Text>
           </TouchableOpacity>
         </View>
