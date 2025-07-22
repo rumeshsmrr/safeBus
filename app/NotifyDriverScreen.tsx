@@ -146,7 +146,7 @@ const NotifyDriverScreen = () => {
           paddingBottom: scrollViewBottomPadding,
         }}
       >
-        <Text className="text-2xl font-light mt-4">My Child</Text>
+        <Text className="text-2xl font-light mt-4">Notify Driver</Text>
         <Text className="text-xl font-light mt-4 ">Connected Child</Text>
         <View className="flex-col gap-2 pt-4">
           {selectedChild.map((child: Child, index: number) => (
