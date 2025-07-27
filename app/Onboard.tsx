@@ -6,7 +6,7 @@ import { Image, Text, TouchableOpacity, View } from "react-native";
 export default function Index() {
   const handleGetStarted = () => {
     // Navigate to the parent_home screen within the (tabs) group
-    router.replace("/(tabs)/parent_home"); // Use replace to prevent going back to onboarding
+    router.replace("/LogingScreen"); // Use replace to prevent going back to onboarding
   };
   return (
     <View className="flex-1 items-center justify-center bg-light-100">

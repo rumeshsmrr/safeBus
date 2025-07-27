@@ -1,18 +1,31 @@
 import { Stack } from "expo-router";
+import { AuthProvider } from "./context/AuthContext";
 import "./global.css"; // Import global styles
 
 export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="Onboard" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="NotifyDriverScreen"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen name="EmergencyScreen" options={{ headerShown: false }} />
-      <Stack.Screen name="LostFoundScreen" options={{ headerShown: false }} />
-      <Stack.Screen name="BuddySystemScreen" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
+    <AuthProvider>
+      <Stack>
+        {/* Onboarding and Auth screens */}
+        <Stack.Screen name="Onboard" options={{ headerShown: false }} />
+        <Stack.Screen name="LogingScreen" options={{ headerShown: false }} />
+
+        {/* Individual screens */}
+        <Stack.Screen
+          name="NotifyDriverScreen"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen name="EmergencyScreen" options={{ headerShown: false }} />
+        <Stack.Screen name="LostFoundScreen" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="BuddySystemScreen"
+          options={{ headerShown: false }}
+        />
+
+        {/* Route Groups - These have their own _layout.tsx files */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(Bus)/(tabs)" options={{ headerShown: false }} />
+      </Stack>
+    </AuthProvider>
   );
 }
