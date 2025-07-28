@@ -153,16 +153,36 @@ const Child = () => {
         <Text className="text-xl font-light mt-4 ">New Link Request</Text>
         <View className="flex-col gap-4 pt-4">
           {newRequest ? (
-            <View className="flex-row items-center gap-4 bg-white p-4 rounded-lg shadow">
-              <Image
-                source={newRequest.image}
-                className="h-12 w-12 rounded-full"
-              />
-              <View className="flex-1">
-                <Text className="text-lg font-semibold">{newRequest.name}</Text>
-                <Text className="text-sm text-blue-700 font-light">
-                  {newRequest.isLinked ? "Linked to Bus" : "Not Linked to Bus"}
-                </Text>
+            <View className="flex-col gap-4 bg-white p-4 rounded-lg shadow">
+              <View className="flex-row items-center gap-4">
+                <Image
+                  source={newRequest.image}
+                  className="h-12 w-12 rounded-full"
+                />
+                <View className="flex-1">
+                  <Text className="text-lg font-semibold">
+                    {newRequest.name}
+                  </Text>
+                  <Text className="text-sm text-blue-700 font-light">
+                    {newRequest.isLinked
+                      ? "Linked to Bus"
+                      : "Not Linked to Bus"}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row justify-between gap-2 border-t border-gray-200 pt-2">
+                <TouchableOpacity
+                  className="bg-redsh py-2 px-4 min-w-[80px] rounded-lg"
+                  onPress={() => console.log("Reject Pressed")}
+                >
+                  <Text className="text-white text-center">Reject</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="bg-blue-500 py-2 px-4 min-w-[80px] rounded-lg"
+                  onPress={() => console.log("Accept Pressed")}
+                >
+                  <Text className="text-white text-center">Accept</Text>
+                </TouchableOpacity>
               </View>
             </View>
           ) : (
