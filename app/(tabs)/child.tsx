@@ -178,10 +178,10 @@ const Child = () => {
                   <Text className="text-white text-center">Reject</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  className="bg-blue-500 py-2 px-4 min-w-[80px] rounded-lg"
-                  onPress={() => console.log("Accept Pressed")}
+                  className="bg-greensh py-2 px-4 min-w-[80px] rounded-lg"
+                  onPress={() => console.log("Confirm Pressed")}
                 >
-                  <Text className="text-white text-center">Accept</Text>
+                  <Text className="text-white text-center">Confirm</Text>
                 </TouchableOpacity>
               </View>
             </View>
