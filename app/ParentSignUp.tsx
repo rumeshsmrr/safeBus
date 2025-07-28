@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -46,17 +47,56 @@ const ParentSignUp = () => {
   const handleSignUp = () => {
     // Validate user input
     if (!user.firstName || !user.lastName || !user.email || !user.password) {
-      alert("Please fill in all fields.");
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Please fill in all fields.",
+        button: "close",
+      });
       return;
     }
 
     if (user.password !== user.confirmPassword) {
-      alert("Passwords do not match.");
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Passwords do not match.",
+        button: "close",
+      });
+      return;
+    }
+
+    //CHECK EMAIL FORMAT
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(user.email)) {
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Please enter a valid email address.",
+        button: "close",
+      });
       return;
     }
 
     // Here you would typically send the user data to your backend for registration
     console.log("User data:", user);
+    Toast.show({
+      type: ALERT_TYPE.SUCCESS,
+      title: "Success",
+      textBody: "Congrats! You have successfully signed up.",
+    });
+    // Reset user state after successful sign up
+    setUser({
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      role: "parent",
+      userID: "", // Reset or generate a new ID
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
     // Navigate to the next screen after successful sign up
     // router.push("/SignUpMenuScreen");
