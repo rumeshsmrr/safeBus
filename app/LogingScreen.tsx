@@ -126,6 +126,12 @@ const LoginScreen = () => {
             <Text className="text-gray-600 text-base">
               Don&apos;t have an account?{" "}
             </Text>
+            <Text
+              className="text-primary text-base font-semibold"
+              onPress={() => router.push("/SignUpMenuScreen")}
+            >
+              Sign Up
+            </Text>
           </View>
         </View>
       </ScrollView>
