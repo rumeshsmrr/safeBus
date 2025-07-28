@@ -38,6 +38,10 @@ export default function RootLayout() {
             options={{ headerShown: false }}
           />
           <Stack.Screen name="ParentSignUp" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="ParentWelcomeScreen"
+            options={{ headerShown: false }}
+          />
 
           {/* Route Groups - These have their own _layout.tsx files */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
