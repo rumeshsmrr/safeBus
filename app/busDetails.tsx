@@ -11,7 +11,7 @@ import {
 
 import { images } from "@/constants/images";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Header from "./Components/header";
+import Header2 from "./Components/header2";
 
 const scrollViewBottomPadding = 24; // Define the padding value
 
@@ -157,7 +157,8 @@ const Bus = () => {
   console.log("Bus ID from params:", busId);
 
   return (
-    <SafeAreaView className="flex-1 bg-light-100 py-9">
+    <SafeAreaView className="flex-1 bg-light-100 py-8">
+      <Header2 />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -165,8 +166,6 @@ const Bus = () => {
           paddingBottom: scrollViewBottomPadding,
         }}
       >
-        <Header isCode={false} />
-
         <Text className="text-2xl font-light mt-4">The Bus</Text>
         <Text className="text-xl font-light mt-4 ">Madusha School Bus</Text>
         <View className="flex-row justify-between gap-0 mt-4 items-center">
