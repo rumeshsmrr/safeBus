@@ -27,12 +27,6 @@ const ParentWelcomeScreen = () => {
   // Split code into individual digits
   const codeDigits = code.split("");
 
-  const handleContinue = () => {
-    // Handle continue action
-    console.log("Continue pressed with code:", code);
-    // Navigate to next screen
-  };
-
   const handleCopyCode = () => {
     // Handle copy code functionality
     console.log("Copy code:", code);

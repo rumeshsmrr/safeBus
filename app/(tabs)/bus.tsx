@@ -1,156 +1,118 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Image,
-  Modal,
   SafeAreaView,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
 import { images } from "@/constants/images";
-import { useRouter } from "expo-router";
 import Header from "../Components/header"; // Assuming this path is correct
 
-const scrollViewBottomPadding = 24; // Define the padding value
+import { router } from "expo-router";
 
-interface Driver {
-  name: string;
-  rating: string;
-  isPrimary: boolean;
-}
+const scrollViewBottomPadding = 100; // Define the padding value
 
-interface Child {
-  id: string;
-  name: string;
-  image: any; // Changed from string to any for local images
-  isLinked: boolean;
+interface BusInterface {
+  firstName: string;
+  lastName: string;
+  email: string;
+  nickname: string;
+  busID: string;
+  rating: number;
+  startLocation: string;
+  endLocation: string;
+  contactNumber: string;
 }
 
 const Bus = () => {
-  const router = useRouter();
-  const [selectedChild, setSelectedChild] = React.useState<Child | null>(null);
-  const [isRateModelVisible, setIsRateModelVisible] = React.useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
 
-  // Add new states for driver rating
-  const [selectedDriver, setSelectedDriver] = React.useState<
-    (Driver & { index: number }) | null
-  >(null);
-  const [rating, setRating] = React.useState(0);
-
-  const handleRatePress = () => {
-    setIsRateModelVisible(true);
-  };
-
-  const closeRateMode = () => {
-    // Reset rating states when closing
-    setSelectedDriver(null);
-    setRating(0);
-    setIsRateModelVisible(false);
-  };
-
-  const tempImage = images.childImage1; // Assuming this is the correct path to the image
-
-  const [isAddChildModalVisible, setIsAddChildModalVisible] =
-    React.useState(false);
-
-  const driverList = [
-    { name: "Madusha Nayajith", rating: "4.7 / 5", isPrimary: true },
-    { name: "John Doe", rating: "4.5 / 5", isPrimary: false },
-    { name: "Jane Smith", rating: "4.8 / 5", isPrimary: false },
-    { name: "Alice Johnson", rating: "4.6 / 5", isPrimary: false },
-  ];
-
-  const childList: Child[] = [
+  const busDetails: BusInterface[] = [
     {
-      id: "1",
-      name: "John Doe",
-      image: tempImage, // This is now a local image reference
-      isLinked: true,
+      firstName: "John",
+      lastName: "Doe",
+      email: "j@gmail.com",
+      nickname: "Madusha School bus",
+      busID: "BUS1212",
+      rating: 4.5,
+      startLocation: "Colombo",
+      endLocation: "Gampaha",
+      contactNumber: "0771234567",
     },
     {
-      id: "2",
-      name: "Jane Smith",
-      image: tempImage, // This is now a local image reference
-      isLinked: false,
+      firstName: "Samitha",
+      lastName: "Perera",
+      email: "samitha@gmail.com",
+      nickname: "Samitha School bus",
+      busID: "BUS1213",
+      rating: 4.8,
+      startLocation: "Kandy",
+      endLocation: "Colombo",
+      contactNumber: "0777654321",
+    },
+    {
+      firstName: "Nadeesha",
+      lastName: "Fernando",
+      email: "nadeesha@gmail.com",
+      nickname: "Nadeesha School bus",
+      busID: "BUS1214",
+      rating: 4.7,
+      startLocation: "Galle",
+      endLocation: "Colombo",
+      contactNumber: "0779876543",
+    },
+    {
+      firstName: "Tharindu",
+      lastName: "Rajapaksha",
+      email: "tharindu@gmail.com",
+      nickname: "Tharindu School bus",
+      busID: "BUS1215",
+      rating: 4.6,
+      startLocation: "Negombo",
+      endLocation: "Colombo",
+      contactNumber: "0776543210",
+    },
+    {
+      firstName: "Dilani",
+      lastName: "Wijesinghe",
+      email: "d@gmail.com",
+      nickname: "Tharindu School bus",
+      busID: "BUS1215",
+      rating: 4.6,
+      startLocation: "Negombo",
+      endLocation: "Colombo",
+      contactNumber: "0776543210",
     },
   ];
 
-  const handleAppChildPress = () => {
-    setIsAddChildModalVisible(true);
-  };
-  const closeAddMode = () => {
-    setIsAddChildModalVisible(false);
-  };
+  // Filter buses based on search query
+  const filteredBuses = busDetails.filter((bus) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      bus.nickname.toLowerCase().includes(query) ||
+      bus.busID.toLowerCase().includes(query) ||
+      bus.startLocation.toLowerCase().includes(query) ||
+      bus.endLocation.toLowerCase().includes(query) ||
+      bus.firstName.toLowerCase().includes(query) ||
+      bus.lastName.toLowerCase().includes(query)
+    );
+  });
 
-  // Driver rating functions
-  const handleDriverSelect = (driver: Driver, index: number) => {
-    setSelectedDriver({ ...driver, index });
-    setRating(0); // Reset rating when selecting a new driver
-  };
-
-  const handleStarPress = (starRating: number) => {
-    setRating(starRating);
-  };
-
-  const handleSubmitRating = () => {
-    if (selectedDriver && rating > 0) {
-      console.log("Rating submitted:", {
-        driver: selectedDriver,
-        rating: rating,
-      });
-      // Reset states
-      setSelectedDriver(null);
-      setRating(0);
-      setIsRateModelVisible(false);
-    } else {
-      alert("Please select a driver and provide a rating");
+  const handleSearchToggle = () => {
+    setIsSearchVisible(!isSearchVisible);
+    if (isSearchVisible) {
+      setSearchQuery(""); // Clear search when hiding
     }
   };
 
-  const renderStars = () => {
-    const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      stars.push(
-        <TouchableOpacity
-          key={i}
-          onPress={() => handleStarPress(i)}
-          className="mx-1"
-        >
-          <Text
-            className={`text-3xl ${i <= rating ? "text-yellow-400" : "text-gray-300"}`}
-          >
-            ★
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-    return stars;
+  const clearSearch = () => {
+    setSearchQuery("");
   };
-
-  // Button Component
-  const Button = ({
-    title,
-    onPress,
-    bgColor,
-  }: {
-    title: string;
-    onPress: () => void;
-    bgColor?: string;
-  }) => (
-    <TouchableOpacity
-      className="w-[48%] bg-black rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
-      style={
-        bgColor ? { backgroundColor: bgColor } : { backgroundColor: "#d2d2d2" }
-      }
-      onPress={onPress}
-    >
-      <Text className="text-xl font-normal text-grayText text-center">
-        {title}
-      </Text>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
@@ -163,252 +125,148 @@ const Bus = () => {
       >
         <Header isCode={false} />
 
-        <Text className="text-2xl font-light mt-4">The Bus</Text>
-        <Text className="text-xl font-light mt-4 ">Madusha School Bus</Text>
-        <View className="flex-row justify-between gap-0 mt-4 items-center">
-          <View className="flex-row gap-2 items-center">
-            <Text className="font-light text-grayText">Maharagama</Text>
-            <View className="w-3 h-3 bg-blue-700 rounded-full" />
-          </View>
-          <View className="flex-1 h-px bg-blue-700 mx-2" />
-          <View className="flex-row gap-2 items-center">
-            <View className="w-3 h-3 bg-blue-700 rounded-full" />
-            <Text className="font-light text-grayText">
-              Royal Institute , Colombo
-            </Text>
-          </View>
+        {/* Header with Search */}
+        <View className="flex-row p-2 justify-between">
+          <Text className="text-2xl font-light mb-2 mt-6">Find a Bus</Text>
+          <TouchableOpacity
+            onPress={handleSearchToggle}
+            className="w-12 h-12 justify-center items-center mt-4 mb-4 p-4 bg-white rounded-full shadow"
+          >
+            <Image
+              source={images.searchImg}
+              style={{ width: 24, height: 24 }}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
         </View>
 
-        <View className="flex-col mt-4 border-t border-grayText pt-4">
-          <Text className="text-xl font-light">Driver List</Text>
-          <View className="flex-col mt-4">
-            <View className="flex-col">
-              {driverList.map((driver) => (
-                <View
-                  key={driver.name}
-                  className="flex-row py-2"
-                  style={{ alignItems: "center" }}
-                >
-                  <View className="flex-1">
-                    <Text className="text-lg text-grayText font-light">
-                      {driver.isPrimary ? "Primary Driver" : "Secondary Driver"}
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-lg text-grayText font-light">
-                      {driver.name}
-                    </Text>
-                  </View>
-                  <View className="flex-1 items-end">
-                    <Text className="text-lg text-grayText font-light">
-                      {driver.rating}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View className="flex-col mt-4 border-t border-b pb-4 border-grayText pt-4">
-          <Text className="text-xl font-light">Contact Info</Text>
-          <View className="flex-col mt-4">
-            <Text className="text-lg text-grayText font-light">
-              Madusha Nayajith
-            </Text>
-            <Text className="text-lg text-grayText font-light">
-              077 123 4567
-            </Text>
-            <Text className="text-lg text-grayText font-light">
-              madusha@example.com
-            </Text>
-            <Text className="text-lg text-grayText font-light">
-              no 1, Road Name, city, state
-            </Text>
-          </View>
-        </View>
-
-        <View className="flex-row flex-wrap justify-between mt-12 w-full">
-          <Button
-            title="Notify Driver"
-            onPress={() => router.push("/NotifyDriverScreen")}
-            bgColor="#F8B959"
-          />
-          <Button
-            title="Complaint"
-            onPress={() => console.log("Complaint Pressed")}
-            bgColor="#F85959"
-          />
-          <Button
-            title="Add Child"
-            onPress={() => setIsAddChildModalVisible(true)}
-            bgColor="#A9C9FB"
-          />
-          <Button
-            title="Rate Driver"
-            onPress={() => handleRatePress()}
-            bgColor="#F292F1"
-          />
-        </View>
-
-        {/* Add Child Modal */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={isAddChildModalVisible}
-          onRequestClose={closeAddMode}
-        >
-          <View className="flex-1 justify-center items-center bg-black/50 p-6">
-            <View className="bg-white rounded-lg p-4 w-full">
-              <Text className="text-xl font-light mb-4">Select Child</Text>
-              {childList.map((child) => (
-                <TouchableOpacity
-                  key={child.id}
-                  className="flex-row items-center mb-4 p-2 bg-gray-50 rounded-lg"
-                  onPress={() => {
-                    setSelectedChild(child);
-                    console.log("Selected child:", child.name);
-                  }}
-                >
-                  <View className="w-12 h-12 rounded-full overflow-hidden mr-3 bg-gray-200">
-                    <Image
-                      source={child.image}
-                      className="w-full h-full"
-                      style={{ resizeMode: "cover" }}
-                      onError={(error) => console.log("Image error:", error)}
-                      onLoad={() => console.log("Image loaded successfully")}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-lg text-gray-800 font-medium">
-                      {child.name}
-                    </Text>
-                    <Text className="text-sm text-gray-500">
-                      {child.isLinked ? "Linked to bus" : "Not linked"}
-                    </Text>
-                  </View>
-                  {selectedChild?.id === child.id && (
-                    <View className="w-6 h-6 bg-blue-500 rounded-full justify-center items-center">
-                      <Text className="text-white text-xs">✓</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-
-              <View className="w-full flex-row mt-4 justify-between gap-3">
-                <TouchableOpacity
-                  className="flex-1 px-4 bg-blue-500 py-3 rounded-lg"
-                  onPress={() => {
-                    console.log("Add new child pressed");
-                    closeAddMode();
-                  }}
-                >
-                  <Text className="text-white text-center text-lg font-light">
-                    Add to Bus
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="px-6 bg-red-500 py-3 rounded-lg"
-                  onPress={closeAddMode}
-                >
-                  <Text className="text-white text-center text-lg font-light">
-                    Close
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </ScrollView>
-
-      {/* Enhanced Rate Driver Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isRateModelVisible}
-        onRequestClose={closeRateMode}
-      >
-        <View className="flex-1 justify-center items-center bg-black/50 p-6">
-          <View className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80%]">
-            <Text className="text-xl font-light mb-6">Rate Driver</Text>
-
-            {/* Driver Selection */}
-            <Text className="text-lg font-medium mb-3">Select Driver:</Text>
-
-            {driverList.map((driver, index) => (
+        {/* Search Input */}
+        {isSearchVisible && (
+          <View className="mb-4 relative">
+            <TextInput
+              className="bg-white rounded-full px-4 py-3 pr-12 shadow"
+              placeholder="Search by bus name, ID, or location..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={true}
+            />
+            {searchQuery.length > 0 && (
               <TouchableOpacity
-                key={index}
-                className={`flex-row items-center mb-3 p-4 rounded-lg border-2 ${
-                  selectedDriver?.index === index
-                    ? "bg-blue-50 border-blue-500"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-                onPress={() => handleDriverSelect(driver, index)}
+                onPress={clearSearch}
+                className="absolute right-4 top-3"
               >
-                <View className="flex-1">
-                  <Text className="text-lg text-gray-800 font-medium">
-                    {driver.name}
-                  </Text>
-                  <Text className="text-sm text-gray-500">
-                    Current Rating: {driver.rating}
-                  </Text>
-                </View>
-                {selectedDriver?.index === index && (
-                  <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center">
-                    <Text className="text-white text-xs font-bold">✓</Text>
-                  </View>
-                )}
+                <Text className="text-gray-500 text-lg">✕</Text>
               </TouchableOpacity>
-            ))}
-
-            {/* Star Rating */}
-            {selectedDriver && (
-              <View className="mb-6">
-                <Text className="text-lg font-medium mb-3">
-                  Rate {selectedDriver.name}:
-                </Text>
-                <View className="flex-row justify-center items-center py-4">
-                  {renderStars()}
-                </View>
-                {rating > 0 && (
-                  <Text className="text-center text-gray-600 mt-2">
-                    {rating} out of 5 stars
-                  </Text>
-                )}
-              </View>
             )}
-
-            {/* Action Buttons - Fixed at bottom */}
-            <View className="w-full flex-row justify-between gap-3 mt-auto">
-              <TouchableOpacity
-                className={`flex-1 px-4 py-4 rounded-lg ${
-                  selectedDriver && rating > 0 ? "bg-blue-500" : "bg-gray-300"
-                }`}
-                onPress={handleSubmitRating}
-                disabled={!selectedDriver || rating === 0}
-              >
-                <Text
-                  className={`text-center text-lg font-light ${
-                    selectedDriver && rating > 0
-                      ? "text-white"
-                      : "text-gray-500"
-                  }`}
-                >
-                  Submit Rating
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="px-6 bg-red-500 py-4 rounded-lg"
-                onPress={closeRateMode}
-              >
-                <Text className="text-white text-center text-lg font-light">
-                  Close
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
+        )}
+
+        {/* Search Results Info */}
+        {searchQuery.length > 0 && (
+          <View className="mb-4">
+            <Text className="text-gray-600 text-sm">
+              {filteredBuses.length} result
+              {filteredBuses.length !== 1 ? "s" : ""} found for &quot;
+              {searchQuery}&quot;
+            </Text>
+          </View>
+        )}
+
+        {/* No Results Message */}
+        {searchQuery.length > 0 && filteredBuses.length === 0 && (
+          <View className="justify-center items-center py-12">
+            <Text className="text-gray-500 text-lg text-center">
+              No buses found matching &quot;{searchQuery}&quot;
+            </Text>
+            <Text className="text-gray-400 text-sm text-center mt-2">
+              Try searching with different keywords
+            </Text>
+          </View>
+        )}
+
+        {/* Bus List */}
+        <View className="gap-4">
+          {filteredBuses.map((bus, index) => (
+            <View key={index} className="bg-white rounded-xl shadow  h-fit">
+              {/* Header Section - Fixed Height */}
+              <View className="p-4 flex-row items-start justify-start gap-2 h-[45px]">
+                <Image
+                  source={images.bus}
+                  style={{ width: 24, height: 24 }}
+                  resizeMode="contain"
+                />
+                <View className="flex-1 justify-center">
+                  <View className="flex-row gap-2 items-center">
+                    <Text
+                      className="text-xl font-medium flex-shrink"
+                      numberOfLines={1}
+                    >
+                      {bus.nickname}
+                    </Text>
+                    <Text className="text-xl font-extralight text-gray-500">
+                      | {bus.busID}
+                    </Text>
+                  </View>
+                </View>
+                <Text className="text-xl font-bold text-secondary">
+                  {bus.rating} / 5
+                </Text>
+              </View>
+
+              {/* Location Section - Fixed Height */}
+              <View className="flex-row px-4 justify-between items-center h-[30px]">
+                <View className="flex-row gap-2 items-center">
+                  <Image
+                    source={images.location}
+                    style={{ width: 12, height: 12 }}
+                    resizeMode="contain"
+                  />
+                  <Text className="text-lg text-gray-500" numberOfLines={1}>
+                    {bus.startLocation}
+                  </Text>
+                </View>
+                <View className="h-[2px] w-[50px] bg-grayText/50" />
+                <View className="flex-row gap-2 items-center">
+                  <Image
+                    source={images.location}
+                    style={{ width: 12, height: 12 }}
+                    resizeMode="contain"
+                  />
+                  <Text className="text-lg text-gray-500" numberOfLines={1}>
+                    {bus.endLocation}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Footer Section - Fixed Height */}
+              <View className="border-t border-gray-200 px-4 py-3 h-[40px] justify-between flex-row ">
+                <Text className="text-base text-grayText" numberOfLines={1}>
+                  {bus.contactNumber ? bus.contactNumber : ""}
+                </Text>
+                <View className="flex-row gap-10">
+                  <TouchableOpacity className="flex-row items-center gap-1">
+                    <Text className="text-base text-primary" numberOfLines={1}>
+                      {bus.contactNumber ? "Contact " : ""}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-row items-center gap-1"
+                    onPress={() =>
+                      router.push(
+                        `/busDetails?busId=${encodeURIComponent(bus.busID)}`
+                      )
+                    }
+                  >
+                    <Text className="text-base text-primary" numberOfLines={1}>
+                      View
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))}
         </View>
-      </Modal>
+      </ScrollView>
     </SafeAreaView>
   );
 };
