@@ -42,7 +42,17 @@ export default function RootLayout() {
             name="ParentWelcomeScreen"
             options={{ headerShown: false }}
           />
+
+          {/* driver and bus */}
+          <Stack.Screen
+            name="(Bus)/BusSignUp"
+            options={{ headerShown: false }}
+          />
           <Stack.Screen name="busDetails" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="(Bus)/AccountSetUpScreen"
+            options={{ headerShown: false }}
+          />
 
           {/* Route Groups - These have their own _layout.tsx files */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
