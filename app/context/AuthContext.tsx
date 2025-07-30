@@ -48,8 +48,8 @@ const credentials = [
     id: "3",
     name: "Student User", // Added student for completeness
     role: "student" as UserRole,
-    email: "student@example.com",
-    password: "student123",
+    email: "st@e.com",
+    password: "123456",
   },
 ];
 

@@ -39,13 +39,16 @@ const LoginScreen = () => {
           router.replace("/(tabs)/parent_home");
         } else if (loggedInUser.role === "bus") {
           router.replace("/(Bus)/(tabs)/driver_home");
-          // } else if (loggedInUser.role === "student") {
-          //   // Add student route if needed
-          //   router.replace("/(student)/dashboard");
+        } else if (loggedInUser.role === "student") {
+          // Add student route if needed
+          router.replace("/(Child)/(tabs)/child_home");
         } else {
           Alert.alert("Login Success", "Unknown role. Please contact support.");
           router.replace("/");
         }
+        setEmail("");
+        setPassword("");
+        setLoading(false);
       } else {
         setError("Invalid email or password. Please try again.");
       }
@@ -55,6 +58,17 @@ const LoginScreen = () => {
     }
 
     setLoading(false);
+  };
+
+  const handleTempararyLogin = (role: string) => {
+    setEmail(
+      role === "parent" ? "p@e.com" : role === "bus" ? "b@e.com" : "st@e.com"
+    );
+    setPassword("123456");
+    console.log("Temparary login for role:", role);
+    console.log("temparary login email:", email);
+    console.log("temparary login password:", password);
+    handleLogin();
   };
 
   return (
@@ -133,6 +147,37 @@ const LoginScreen = () => {
               Sign Up
             </Text>
           </View>
+          {/* //temparary easy loging Button */}
+          <TouchableOpacity
+            className="mt-4 items-center"
+            onPress={() => {
+              handleTempararyLogin("parent");
+            }}
+          >
+            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
+              parent{" "}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="mt-4 items-center"
+            onPress={() => {
+              handleTempararyLogin("bus");
+            }}
+          >
+            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
+              bus{" "}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="mt-4 items-center"
+            onPress={() => {
+              handleTempararyLogin("student");
+            }}
+          >
+            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
+              student{" "}
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

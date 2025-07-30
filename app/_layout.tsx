@@ -47,6 +47,10 @@ export default function RootLayout() {
           {/* Route Groups - These have their own _layout.tsx files */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(Bus)/(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="(Child)/(tabs)"
+            options={{ headerShown: false }}
+          />
 
           <Stack.Screen
             name="(Child)/ChildSignUp"

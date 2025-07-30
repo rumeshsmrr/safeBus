@@ -80,6 +80,29 @@ const SignUpMenuScreen = () => {
               I am a Child
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            className={`flex-1 bg-white rounded-2xl p-4 items-center shadow-lg border-2 min-h-[200px] ${
+              selectedRole === "child"
+                ? "border-blue-500 bg-blue-50"
+                : "border-transparent"
+            }`}
+            onPress={() => handleRoleSelect("child")}
+            activeOpacity={0.8}
+          >
+            <View className="flex-1 justify-center items-center mb-3">
+              <Image
+                source={images.boyGirl}
+                style={{ width: 100, height: 100 }}
+                resizeMode="contain"
+                onError={(error) => console.log("Child image error:", error)}
+                onLoad={() => console.log("Child image loaded")}
+              />
+            </View>
+            <Text className="text-base font-medium text-gray-800 text-center">
+              I am a Bus
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Bottom Illustration */}
