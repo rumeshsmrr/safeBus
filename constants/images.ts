@@ -3,6 +3,7 @@ import bgchilds from "@/assets/images/bgChild.png";
 import boy1 from "@/assets/images/boy1.png";
 import boyGirl from "@/assets/images/boyGirl.png";
 import bus from "@/assets/images/busicon.png";
+import driver from "@/assets/images/driver.png";
 import childImage1 from "@/assets/images/girl.png";
 import highlight from "@/assets/images/highlight.png";
 import location from "@/assets/images/locationpin.png";
@@ -24,4 +25,5 @@ export const images = {
   bus,
   location,
   searchImg,
+  driver,
 };
