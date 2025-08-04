@@ -1,7 +1,8 @@
 // app/LoginScreen.tsx
 import { icons } from "@/constants/icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +22,53 @@ const LoginScreen = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isCheckingStorage, setIsCheckingStorage] = useState(true);
+
+  // Check for stored user data on component mount
+  useEffect(() => {
+    checkStoredUser();
+  }, []);
+
+  const checkStoredUser = async () => {
+    try {
+      const storedUser = await AsyncStorage.getItem("userData");
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        console.log("Found stored user:", userData);
+        redirectBasedOnRole(userData.role);
+      }
+    } catch (error) {
+      console.error("Error checking stored user:", error);
+    } finally {
+      setIsCheckingStorage(false);
+    }
+  };
+
+  const redirectBasedOnRole = (role: string) => {
+    switch (role) {
+      case "parent":
+        router.replace("/(tabs)/parent_home");
+        break;
+      case "bus":
+        router.replace("/(Bus)/(tabs)/driver_home");
+        break;
+      case "student":
+        router.replace("/(Child)/(tabs)/child_home");
+        break;
+      default:
+        Alert.alert("Login Success", "Unknown role. Please contact support.");
+        router.replace("/");
+    }
+  };
+
+  const storeUserData = async (userData: any) => {
+    try {
+      await AsyncStorage.setItem("userData", JSON.stringify(userData));
+      console.log("User data stored successfully");
+    } catch (error) {
+      console.error("Error storing user data:", error);
+    }
+  };
 
   const handleLogin = async () => {
     setError("");
@@ -30,22 +78,17 @@ const LoginScreen = () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     try {
-      const loggedInUser = await login(email, password); // CHANGED: Get user data directly from login
+      const loggedInUser = await login(email, password);
 
       if (loggedInUser) {
         console.log("role", loggedInUser.role);
 
-        if (loggedInUser.role === "parent") {
-          router.replace("/(tabs)/parent_home");
-        } else if (loggedInUser.role === "bus") {
-          router.replace("/(Bus)/(tabs)/driver_home");
-        } else if (loggedInUser.role === "student") {
-          // Add student route if needed
-          router.replace("/(Child)/(tabs)/child_home");
-        } else {
-          Alert.alert("Login Success", "Unknown role. Please contact support.");
-          router.replace("/");
-        }
+        // Store user data in AsyncStorage
+        await storeUserData(loggedInUser);
+
+        // Redirect based on role
+        redirectBasedOnRole(loggedInUser.role);
+
         setEmail("");
         setPassword("");
         setLoading(false);
@@ -70,6 +113,16 @@ const LoginScreen = () => {
     console.log("temparary login password:", password);
     handleLogin();
   };
+
+  // Show loading screen while checking stored user data
+  if (isCheckingStorage) {
+    return (
+      <SafeAreaView className="flex-1 bg-light-100 justify-center items-center">
+        <ActivityIndicator size="large" color="#0066CC" />
+        <Text className="text-gray-600 mt-4">Checking login status...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-light-100 justify-center items-center p-6">
@@ -147,7 +200,8 @@ const LoginScreen = () => {
               Sign Up
             </Text>
           </View>
-          {/* //temparary easy loging Button */}
+
+          {/* Temporary easy login buttons */}
           <TouchableOpacity
             className="mt-4 items-center"
             onPress={() => {
