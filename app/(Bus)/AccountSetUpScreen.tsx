@@ -109,37 +109,11 @@ const AccountSetUpScreen = () => {
       return;
     }
 
-    // You would typically send this data to your backend
-    console.log("Account setup data:", busAccount);
-
-    try {
-      // Simulate API call for account setup
-      // await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Optionally save the full busAccount info to AsyncStorage
-      const busAccountString = JSON.stringify(busAccount);
-      await AsyncStorage.setItem("busAccountInfo", busAccountString);
-      console.log("Bus account info saved to storage:", busAccount);
-
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Success",
-        textBody: "Account setup complete!",
-      });
-
-      // Navigate to the next screen after successful setup
-      // router.push("/(Bus)/Dashboard"); // Example navigation
-    } catch (error) {
-      console.error("Account setup failed:", error);
-      Dialog.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Setup Error",
-        textBody: "An error occurred during account setup. Please try again.",
-        button: "close",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    Toast.show({
+      type: ALERT_TYPE.SUCCESS,
+      title: "Success",
+      textBody: "Account setup complete!",
+    });
   };
 
   return (

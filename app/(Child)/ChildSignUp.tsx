@@ -99,7 +99,7 @@ const ChildSignUp = () => {
     });
 
     // Navigate to the next screen after successful sign up
-    // router.push("/SignUpMenuScreen");
+    router.push("/(Child)/ChildWelcomeScreen");
   };
 
   const EyeIcon = ({ visible }: { visible: boolean }) => (

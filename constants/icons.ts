@@ -1,5 +1,6 @@
 import arrow from "@/assets/icons/arrow.png";
 import back from "@/assets/icons/back.png";
+import buddy from "@/assets/icons/buddy.png";
 import bus from "@/assets/icons/bus.png";
 import calender from "@/assets/icons/calender.png";
 import child from "@/assets/icons/child.png";
@@ -34,4 +35,5 @@ export const icons = {
   schoolLocationIcon,
   back,
   calender,
+  buddy,
 };

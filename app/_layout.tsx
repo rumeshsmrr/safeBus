@@ -66,6 +66,10 @@ export default function RootLayout() {
             name="(Child)/ChildSignUp"
             options={{ headerShown: false }}
           />
+          <Stack.Screen
+            name="(Child)/ChildWelcomeScreen"
+            options={{ headerShown: false }}
+          />
         </Stack>
       </AlertNotificationRoot>
     </AuthProvider>

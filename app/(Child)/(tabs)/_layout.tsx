@@ -59,6 +59,26 @@ const _layout = () => {
           ),
         }}
       />
+      <Tabs.Screen
+        name="child_buddy"
+        options={{
+          title: "Buddy",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.buddy} title="Buddy" />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="child_profile"
+        options={{
+          title: "Profile",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.person} title="Profile" />
+          ),
+        }}
+      />
     </Tabs>
   );
 };
