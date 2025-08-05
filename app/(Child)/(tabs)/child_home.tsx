@@ -3,9 +3,11 @@ import { images } from "@/constants/images";
 import React from "react";
 import {
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -41,7 +43,31 @@ const childs = [
   },
 ];
 
-const child_home = () => {
+const ChildHome = () => {
+  const [notifyDriverModalVisible, setNotifyDriverModalVisible] =
+    React.useState(false);
+
+  const [notifyParentModalVisible, setNotifyParentModalVisible] =
+    React.useState(false);
+
+  const [message, setMessage] = React.useState("");
+
+  const handeleNotifyDriver = () => {
+    setNotifyDriverModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setNotifyDriverModalVisible(false);
+  };
+
+  const handleNotifyParent = () => {
+    setNotifyParentModalVisible(true);
+  };
+
+  const handleCloseParentModal = () => {
+    setNotifyParentModalVisible(false);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       {/* Main scrollable content area */}
@@ -114,7 +140,7 @@ const child_home = () => {
           <TouchableOpacity
             className="w-[48%] bg-yellowsh rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
             onPress={() => {
-              console.log("Notify Driver Pressed");
+              handeleNotifyDriver();
             }}
           >
             <Text className="text-xl font-normal text-grayText text-center">
@@ -124,7 +150,7 @@ const child_home = () => {
           <TouchableOpacity
             className="w-[48%] bg-greensh rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
             onPress={() => {
-              console.log("Notify Parent Pressed");
+              handleNotifyParent();
             }}
           >
             <Text className="text-xl font-normal text-grayText text-center">
@@ -133,8 +159,148 @@ const child_home = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* notify driver modal  */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={notifyDriverModalVisible}
+        onRequestClose={() => {
+          handleCloseModal();
+        }}
+      >
+        <View className="flex-1 justify-end items-center bg-black/80">
+          <View className="bg-white rounded-t-lg w-full p-6 pb-12">
+            <Text className="text-2xl font-semibold mb-4">Notify Driver</Text>
+
+            {/* Contact Driver Button Section */}
+            <View className="w-full border-b border-gray-200 pb-4 mb-4">
+              <TouchableOpacity className="flex-row items-center h-[80px] justify-center bg-blue-500 rounded-lg px-4 py-3">
+                <Text className="text-white text-xl font-medium m-auto text-center">
+                  Contact Driver
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-darkbg text-lg font-medium">
+              Sent Message
+            </Text>
+            <Text className="text-gray-600 text-lg mb-4 mt-4">
+              Enter your message to notify the driver:
+            </Text>
+
+            <View className="mb-6">
+              <TextInput
+                className="border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[80px]"
+                placeholder="Type your message..."
+                multiline
+                numberOfLines={3}
+                value={message}
+                onChangeText={setMessage}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View className="flex-row justify-between space-x-3 gap-2">
+              <TouchableOpacity
+                className="bg-gray-300 rounded-lg min-w-[48%] px-10  py-4"
+                onPress={() => {
+                  setMessage("");
+                  handleCloseModal();
+                }}
+              >
+                <Text className="text-gray-800 font-medium text-xl text-center">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className={`rounded-lg px-10 min-w-[48%]  py-4 ${message.trim() ? "bg-greensh" : "bg-gray-300"}`}
+                onPress={() => {
+                  console.log("Notify Driver Confirmed:", message);
+                  setMessage("");
+                  handleCloseModal();
+                }}
+                disabled={!message.trim()}
+              >
+                <Text className="text-white font-medium text-xl m-auto text-center">
+                  Send
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={notifyParentModalVisible}
+        onRequestClose={() => {
+          handleCloseParentModal();
+        }}
+      >
+        <View className="flex-1 justify-end items-center bg-black/80">
+          <View className="bg-white rounded-t-lg w-full p-6 pb-12">
+            <Text className="text-2xl font-semibold mb-4">Notify Parent</Text>
+
+            {/* Contact Parent Button Section */}
+            <View className="w-full border-b border-gray-200 pb-4 mb-4">
+              <TouchableOpacity className="flex-row items-center h-[80px] justify-center bg-blue-500 rounded-lg px-4 py-3">
+                <Text className="text-white text-xl font-medium m-auto text-center">
+                  Contact Parent
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-darkbg text-lg font-medium">
+              Sent Message
+            </Text>
+            <Text className="text-gray-600 text-lg mb-4 mt-4">
+              Enter your message to notify the Parent:
+            </Text>
+
+            <View className="mb-6">
+              <TextInput
+                className="border border-gray-300 rounded-lg px-3 py-2 text-base min-h-[80px]"
+                placeholder="Type your message..."
+                multiline
+                numberOfLines={3}
+                value={message}
+                onChangeText={setMessage}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View className="flex-row justify-between space-x-3 gap-2">
+              <TouchableOpacity
+                className="bg-gray-300 rounded-lg min-w-[48%] px-10  py-4"
+                onPress={() => {
+                  setMessage("");
+                  handleCloseParentModal();
+                }}
+              >
+                <Text className="text-gray-800 font-medium text-xl text-center">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className={`rounded-lg px-10 min-w-[48%]  py-4 ${message.trim() ? "bg-greensh" : "bg-gray-300"}`}
+                onPress={() => {
+                  console.log("Notify Parent Confirmed:", message);
+                  setMessage("");
+                  handleCloseParentModal();
+                }}
+                disabled={!message.trim()}
+              >
+                <Text className="text-white font-medium text-xl m-auto text-center">
+                  Send
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
-export default child_home;
+export default ChildHome;
