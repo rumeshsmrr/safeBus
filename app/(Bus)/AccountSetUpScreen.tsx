@@ -4,21 +4,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
+  Platform,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification"; // Assuming these are available
+import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Placeholder for router if not using expo-router
 const router = {
   push: (path: string) => {
     console.log(`Navigating to: ${path}`);
-    // In a real app, you'd use a navigation library here
-    // For demonstration, we'll just log and show a toast
     Toast.show({
       type: ALERT_TYPE.INFO,
       title: "Navigation",
@@ -30,12 +29,12 @@ const router = {
 interface AccountSetUpInfo {
   firstName: string;
   lastName: string;
-  busId: string; // Unique identifier for the bus driver
-  busNumber: string; // Bus number or identifier
+  busId: string;
+  busNumber: string;
   busNickName: string;
-  startLocation: string; // Starting location of the bus route
-  endLocation: string; // Ending location of the bus route
-  contactNumber: string; // Contact number for the bus driver
+  startLocation: string;
+  endLocation: string;
+  contactNumber: string;
 }
 
 const AccountSetUpScreen = () => {
@@ -49,23 +48,19 @@ const AccountSetUpScreen = () => {
     endLocation: "",
     contactNumber: "",
   });
-  const [isLoading, setIsLoading] = useState(false); // New loading state for button
+  const [isLoading, setIsLoading] = useState(false);
 
-  // useEffect to get info from AsyncStorage only once on component mount
   useEffect(() => {
     const getUserData = async () => {
       try {
-        // Note: The previous component saved data under key "user", not "userData"
         const data = await AsyncStorage.getItem("userData");
         if (data) {
           const parsedData = JSON.parse(data);
           console.log("Retrieved user data from storage:", parsedData);
-          // Update busAccount state with retrieved firstName and lastName
           setBusAccount((prev) => ({
             ...prev,
             firstName: parsedData.firstName || "",
             lastName: parsedData.lastName || "",
-            // You might want to generate busId here or fetch from backend
             busId: `bus_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           }));
         } else {
@@ -83,13 +78,11 @@ const AccountSetUpScreen = () => {
     };
 
     getUserData();
-  }, []); // Empty dependency array means this runs only once on mount
+  }, []);
 
-  // Handle continue button press
   const handleContinue = async () => {
     setIsLoading(true);
 
-    // Basic validation (add more as needed)
     if (
       !busAccount.firstName ||
       !busAccount.lastName ||
@@ -114,16 +107,30 @@ const AccountSetUpScreen = () => {
       title: "Success",
       textBody: "Account setup complete!",
     });
+    setIsLoading(false);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-light-100 justify-center items-center p-6">
-      <ScrollView showsVerticalScrollIndicator={false} className="w-full">
-        <View className="flex-1 justify-center items-center mt-4">
-          <Text className="text-2xl font-light text-darkbg">
+    <SafeAreaView className="flex-1 bg-light-100">
+      <KeyboardAwareScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 24,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid={true}
+        enableAutomaticScroll={Platform.OS === "ios"}
+        extraHeight={130}
+        extraScrollHeight={130}
+        keyboardOpeningTime={250}
+      >
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-2xl font-light text-darkbg mb-10">
             Set Up Account
           </Text>
-          <View className="mt-10 w-full items-start flex-col ">
+
+          <View className="w-full items-start flex-col">
             <Text className="text-lg font-medium text-darkbg mb-2 mt-2">
               First Name
             </Text>
@@ -133,10 +140,11 @@ const AccountSetUpScreen = () => {
               textContentType="name"
               autoCapitalize="words"
               autoComplete="name"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, firstName: text })
               }
-              value={busAccount.firstName} // Bind value to state
+              value={busAccount.firstName}
             />
 
             <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
@@ -148,10 +156,11 @@ const AccountSetUpScreen = () => {
               textContentType="name"
               autoCapitalize="words"
               autoComplete="name"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, lastName: text })
               }
-              value={busAccount.lastName} // Bind value to state
+              value={busAccount.lastName}
             />
 
             <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
@@ -160,6 +169,7 @@ const AccountSetUpScreen = () => {
             <TextInput
               className="bg-white rounded-full p-4 w-full"
               placeholder="Enter bus number (e.g., ABC-1234)"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, busNumber: text })
               }
@@ -172,6 +182,7 @@ const AccountSetUpScreen = () => {
             <TextInput
               className="bg-white rounded-full p-4 w-full"
               placeholder="Enter a nickname for the bus"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, busNickName: text })
               }
@@ -184,6 +195,7 @@ const AccountSetUpScreen = () => {
             <TextInput
               className="bg-white rounded-full p-4 w-full"
               placeholder="Enter starting location"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, startLocation: text })
               }
@@ -196,6 +208,7 @@ const AccountSetUpScreen = () => {
             <TextInput
               className="bg-white rounded-full p-4 w-full"
               placeholder="Enter ending location"
+              returnKeyType="next"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, endLocation: text })
               }
@@ -210,13 +223,14 @@ const AccountSetUpScreen = () => {
               placeholder="Enter contact number"
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
+              returnKeyType="done"
               onChangeText={(text) =>
                 setBusAccount({ ...busAccount, contactNumber: text })
               }
               value={busAccount.contactNumber}
             />
 
-            <View className="mt-6 w-full">
+            <View className="mt-8 w-full mb-6">
               <TouchableOpacity
                 className="bg-primary rounded-full p-4"
                 onPress={handleContinue}
@@ -233,7 +247,7 @@ const AccountSetUpScreen = () => {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };
