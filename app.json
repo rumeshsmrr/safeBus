@@ -9,14 +9,27 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to help you pick start and end points on the map."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/safeBuslogo1.png",
         "backgroundColor": "#1F62FF"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.rumeshsmrr.safeBus",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +50,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
     }
   }
 }

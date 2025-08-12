@@ -11,7 +11,7 @@ export default function RootLayout() {
       >
         <Stack>
           {/* Onboarding and Auth screens */}
-          <Stack.Screen name="Onboard" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="LogingScreen" options={{ headerShown: false }} />
           <Stack.Screen
             name="SignUpMenuScreen"
