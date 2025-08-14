@@ -3,6 +3,7 @@
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -12,16 +13,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const ParentWelcomeScreen = () => {
   const [code, setCode] = useState("");
   const [copiedText, setCopiedText] = useState("");
+  //get parent code from storage
+  const getParentCode = async () => {
+    const user = await AsyncStorage.getItem("user");
+    if (user) {
+      const parsedUser = JSON.parse(user);
+      console.log("Parsed user data:", parsedUser);
+      setCode(parsedUser.parentCode);
+    }
+  };
 
-  // Auto-generated code with 6 digits
   useEffect(() => {
-    // Generate a random 6-digit code
-    const generateCode = () => {
-      return Math.floor(100000 + Math.random() * 900000).toString();
-    };
-
-    const fetchedCode = generateCode();
-    setCode(fetchedCode);
+    getParentCode();
   }, []);
 
   // Split code into individual digits
@@ -104,7 +107,7 @@ const ParentWelcomeScreen = () => {
 
           {/* Continue Button */}
           <TouchableOpacity
-            onPress={() => router.push("/LogingScreen")}
+            onPress={() => router.push("/(tabs)/parent_home")}
             className="w-full bg-blue-500 rounded-full py-4 mb-8"
           >
             <Text className="text-white text-center text-lg font-semibold">

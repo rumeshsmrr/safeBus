@@ -17,7 +17,17 @@ import Svg, { Path } from "react-native-svg";
 import { auth, db } from "@/app/lib/firebase";
 import { images } from "@/constants/images";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Role = "parent" | "child" | "driver";
 
@@ -51,7 +61,6 @@ const ParentSignUp: React.FC = () => {
           d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
           stroke="#666"
           strokeWidth="2"
-          fill="none"
         />
       ) : (
         <>
@@ -59,7 +68,6 @@ const ParentSignUp: React.FC = () => {
             d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
             stroke="#666"
             strokeWidth="2"
-            fill="none"
           />
           <Path d="M2 2l20 20" stroke="#666" strokeWidth="2" />
         </>
@@ -69,11 +77,26 @@ const ParentSignUp: React.FC = () => {
           d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
           stroke="#666"
           strokeWidth="2"
-          fill="none"
         />
       )}
     </Svg>
   );
+
+  // ---- 6-digit code helpers ----
+  const gen6 = () =>
+    String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+
+  const getUniqueParentCode = async (): Promise<string> => {
+    for (let i = 0; i < 6; i++) {
+      const code = gen6();
+      const qSnap = await getDocs(
+        query(collection(db, "users"), where("parentCode", "==", code))
+      );
+      if (qSnap.empty) return code;
+    }
+    throw new Error("Could not generate a unique code. Please try again.");
+  };
+  // -------------------------------
 
   const handleSignUp = async () => {
     // Basic validation
@@ -133,7 +156,10 @@ const ParentSignUp: React.FC = () => {
         `${user.firstName.trim()} ${user.lastName.trim()}`.trim();
       await updateProfile(cred.user, { displayName });
 
-      // Create Firestore profile
+      // Generate unique 6-digit code
+      const parentCode = await getUniqueParentCode();
+
+      // Create Firestore profile (users/{uid})
       await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
         email: user.email.trim().toLowerCase(),
@@ -141,18 +167,34 @@ const ParentSignUp: React.FC = () => {
         firstName: user.firstName.trim(),
         lastName: user.lastName.trim(),
         role: "parent",
+        parentCode, // 👈 6-digit code stored here
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        // Add more fields later: phone, childIds, push tokens, etc.
       });
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
-        textBody: "Account created successfully.",
+        textBody: `Account created. Your code: ${parentCode}`,
       });
 
-      // Clear local state
+      //store all saved user details with parent code, without password
+      await AsyncStorage.setItem(
+        "user",
+        JSON.stringify({
+          uid: cred.user.uid,
+          email: user.email.trim().toLowerCase(),
+          fullName: displayName,
+          firstName: user.firstName.trim(),
+          lastName: user.lastName.trim(),
+          role: "parent",
+          parentCode, // 👈 6-digit code stored here
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+
+      // Reset local state
       setUser({
         firstName: "",
         lastName: "",
@@ -162,19 +204,16 @@ const ParentSignUp: React.FC = () => {
         role: "parent",
       });
 
-      // Navigate (adjust if you want to land on tabs directly)
+      // Navigate
       router.replace("/ParentWelcomeScreen");
     } catch (e: any) {
-      // Map common Firebase auth errors
       const code = e?.code || "";
       let message = e?.message || "Sign up failed.";
-      if (code === "auth/email-already-in-use") {
+      if (code === "auth/email-already-in-use")
         message = "This email is already in use.";
-      } else if (code === "auth/invalid-email") {
+      else if (code === "auth/invalid-email")
         message = "Invalid email address.";
-      } else if (code === "auth/weak-password") {
-        message = "Password is too weak.";
-      }
+      else if (code === "auth/weak-password") message = "Password is too weak.";
       Dialog.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

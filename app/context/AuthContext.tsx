@@ -1,3 +1,9 @@
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import React, {
   createContext,
   ReactNode,
@@ -6,10 +12,12 @@ import React, {
   useState,
 } from "react";
 
-// Define the UserRole type, including 'student' for completeness as per project scope
+// ✅ Use your alias/path to the initialized Firebase SDK
+import { auth, db } from "../lib/firebase";
+
+// Keep your existing types
 type UserRole = "parent" | "bus" | "student";
 
-// Define the User interface
 interface User {
   id: string;
   name: string;
@@ -17,90 +25,91 @@ interface User {
   email: string;
 }
 
-// Define the AuthContextType interface, now including isLoading
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<User | null>; // CHANGED: Now returns Promise<User | null>
-  logout: () => void;
+  login: (email: string, password: string) => Promise<User | null>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
-// Create the AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Hardcoded credentials (for demonstration purposes)
-const credentials = [
-  {
-    id: "1",
-    name: "Parent User",
-    role: "parent" as UserRole,
-    email: "p@e.com",
-    password: "123456",
-  },
-  {
-    id: "2",
-    name: "Bus User", // This is the driver role
-    role: "bus" as UserRole,
-    email: "b@e.com",
-    password: "123456",
-  },
-  {
-    id: "3",
-    name: "Student User", // Added student for completeness
-    role: "student" as UserRole,
-    email: "st@e.com",
-    password: "123456",
-  },
-];
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Build an app-level User object from Firebase user + Firestore profile
+  const buildUserFromProfile = async (
+    uid: string,
+    email: string
+  ): Promise<User> => {
+    const snap = await getDoc(doc(db, "users", uid));
+    const data = snap.data() || {};
+    const role = (data.role as UserRole) ?? "parent"; // fallback if missing
+    const name =
+      (data.fullName as string) ??
+      [data.firstName, data.lastName].filter(Boolean).join(" ") ??
+      email;
+    return { id: uid, name: name || email, role, email };
+  };
+
+  // Restore session
   useEffect(() => {
-    const checkInitialAuth = async () => {
-      // Simulate async check for existing session
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setIsLoading(false);
-    };
-    checkInitialAuth();
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      try {
+        if (fbUser) {
+          const profile = await buildUserFromProfile(
+            fbUser.uid,
+            fbUser.email || ""
+          );
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
+      } catch (e) {
+        console.warn("Auth state error:", e);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    });
+    return () => unsub();
   }, []);
 
   const login = async (
     email: string,
     password: string
   ): Promise<User | null> => {
-    // CHANGED: Now returns User | null
     setIsLoading(true);
-    const found = credentials.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    // Simulate async operation for login
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (found) {
-      const userData = {
-        id: found.id,
-        name: found.name,
-        role: found.role,
-        email: found.email,
-      };
-      setUser(userData);
+    try {
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+      const profile = await buildUserFromProfile(
+        cred.user.uid,
+        cred.user.email || email.trim()
+      );
+      setUser(profile);
+      return profile;
+    } catch (e) {
+      console.warn("Login failed:", e);
+      setUser(null);
+      return null;
+    } finally {
       setIsLoading(false);
-      return userData; // CHANGED: Return the user data
-    } else {
-      setIsLoading(false);
-      return null; // CHANGED: Return null if login failed
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await signOut(auth);
       setUser(null);
+    } finally {
       setIsLoading(false);
-    }, 300);
+    }
   };
 
   return (
@@ -111,12 +120,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 };
 
-// Add default export to fix Expo Router warning
+// Default export to keep Expo Router quiet
 export default AuthProvider;
