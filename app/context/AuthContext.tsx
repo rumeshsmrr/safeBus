@@ -13,6 +13,7 @@ import React, {
 } from "react";
 
 // ✅ Use your alias/path to the initialized Firebase SDK
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { auth, db } from "../lib/firebase";
 
 // Keep your existing types
@@ -107,6 +108,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signOut(auth);
       setUser(null);
+      console.log("User logged out successfully");
+      try {
+        await AsyncStorage.removeItem("user");
+        console.log("User data cleared successfully");
+      } catch (e) {
+        console.error("Error clearing user data:", e);
+      }
     } finally {
       setIsLoading(false);
     }
