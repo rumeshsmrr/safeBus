@@ -31,7 +31,8 @@ const LoginScreen = () => {
 
   const checkStoredUser = async () => {
     try {
-      const storedUser = await AsyncStorage.getItem("userData");
+      const storedUser = await AsyncStorage.getItem("user");
+      console.log("Stored user data:", storedUser);
       if (storedUser) {
         const userData = JSON.parse(storedUser);
         console.log("Found stored user:", userData);
