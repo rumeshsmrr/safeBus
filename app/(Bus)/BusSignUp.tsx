@@ -58,7 +58,7 @@ const BusSignUp = () => {
     try {
       // Save user data to AsyncStorage WITHOUT PASSWORDS
       const { password, confirmPassword, ...dataToSave } = userData;
-      await AsyncStorage.setItem("userData", JSON.stringify(dataToSave));
+      await AsyncStorage.setItem("user", JSON.stringify(dataToSave));
       console.log("User data saved successfully");
     } catch (error) {
       console.error("Error saving user data:", error);

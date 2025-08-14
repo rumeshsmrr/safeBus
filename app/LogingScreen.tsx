@@ -24,7 +24,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "./context/AuthContext";
 
-const STORAGE_KEY = "userData";
+const STORAGE_KEY = "user";
 
 const LoginScreen = () => {
   const { login } = useAuth();

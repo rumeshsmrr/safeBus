@@ -16,6 +16,7 @@ const Header = ({ isCode }: HeaderProps) => {
   const [copiedText, setCopiedText] = useState("");
   const [parentCode, setParentCode] = useState(""); // Default parent code
   interface User {
+    name?: string;
     firstName?: string;
     parentCode?: string;
     // Add other properties as needed
@@ -34,8 +35,10 @@ const Header = ({ isCode }: HeaderProps) => {
   useEffect(() => {
     const fetchData = async () => {
       const user = await AsyncStorage.getItem("user");
+      console.log("Fetched user data:", user);
       if (user) {
         const parsedUser = JSON.parse(user);
+        console.log(parsedUser);
         setUser(parsedUser);
         if (parsedUser.parentCode) {
           setParentCode(parsedUser.parentCode);
@@ -50,9 +53,7 @@ const Header = ({ isCode }: HeaderProps) => {
       <View className="flex-row items-center">
         <Image source={images.parentImage} className="h-12 w-12 rounded-full" />
         <View className="flex-1 items-center justify-center text-center">
-          <Text className="text-2xl font-semibold">
-            Hello {user.firstName}!
-          </Text>
+          <Text className="text-2xl font-semibold">Hello {user.name} !</Text>
           <Text className="text-lg text-gray-600 mt-1 text-center">
             Today {currentDate.getDate()}{" "}
             {currentDate.toLocaleDateString("default", { month: "short" })}

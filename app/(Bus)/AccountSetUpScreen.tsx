@@ -171,7 +171,7 @@ const AccountSetUpScreen: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const data = await AsyncStorage.getItem("userData");
+        const data = await AsyncStorage.getItem("user");
         const baseId = `bus_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         if (data) {
           const u = JSON.parse(data);
@@ -356,7 +356,7 @@ const AccountSetUpScreen: React.FC = () => {
         { uid, role: "bus", currentBusId: busId, updatedAt: serverTimestamp() },
         { merge: true }
       );
-      await AsyncStorage.setItem("busAccountData", JSON.stringify(payload));
+      // await AsyncStorage.setItem("busAccountData", JSON.stringify(payload));
       router.replace("/(Bus)/(tabs)/bus_home");
     } catch (e: any) {
       console.error("Save bus profile error:", e);

@@ -12,7 +12,7 @@ import {
 const handleLogout = () => {
   // Add logout logic here
   //remove user data from storage, clear session, etc.
-  AsyncStorage.removeItem("userData")
+  AsyncStorage.removeItem("user")
     .then(() => {
       console.log("User data removed");
       //Navigate to login or home screen after logout
