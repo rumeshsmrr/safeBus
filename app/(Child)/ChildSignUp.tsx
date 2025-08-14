@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   Text,
@@ -14,7 +15,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { images } from "@/constants/images";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
 
 interface User {
   firstName: string;
@@ -32,6 +37,7 @@ interface User {
 const ChildSignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User>({
     firstName: "",
     lastName: "",
@@ -43,14 +49,23 @@ const ChildSignUp = () => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
-
-  const handleSignUp = () => {
-    // Validate user input
+  const handleSignUp = async () => {
+    // Basic validation
     if (!user.firstName || !user.lastName || !user.email || !user.password) {
       Dialog.show({
         type: ALERT_TYPE.DANGER,
-        title: "Error",
+        title: "Missing info",
         textBody: "Please fill in all fields.",
+        button: "close",
+      });
+      return;
+    }
+
+    if (user.password.length < 6) {
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Weak password",
+        textBody: "Password must be at least 6 characters.",
         button: "close",
       });
       return;
@@ -59,47 +74,106 @@ const ChildSignUp = () => {
     if (user.password !== user.confirmPassword) {
       Dialog.show({
         type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Passwords do not match.",
+        title: "Passwords don’t match",
+        textBody: "Please confirm your password.",
         button: "close",
       });
       return;
     }
 
-    //CHECK EMAIL FORMAT
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(user.email)) {
       Dialog.show({
         type: ALERT_TYPE.DANGER,
-        title: "Error",
+        title: "Invalid email",
         textBody: "Please enter a valid email address.",
         button: "close",
       });
       return;
     }
 
-    // Here you would typically send the user data to your backend for registration
-    console.log("User data:", user);
-    Toast.show({
-      type: ALERT_TYPE.SUCCESS,
-      title: "Success",
-      textBody: "Congrats! You have successfully signed up.",
-    });
-    // Reset user state after successful sign up
-    setUser({
-      firstName: "",
-      lastName: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-      role: "parent",
-      userID: "", // Reset or generate a new ID
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    try {
+      setLoading(true);
 
-    // Navigate to the next screen after successful sign up
-    router.push("/(Child)/ChildWelcomeScreen");
+      // Create auth user
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        user.email.trim(),
+        user.password
+      );
+
+      // Set display name
+      const displayName =
+        `${user.firstName.trim()} ${user.lastName.trim()}`.trim();
+      await updateProfile(cred.user, { displayName });
+
+      // Create Firestore profile (users/{uid})
+      await setDoc(doc(db, "users", cred.user.uid), {
+        uid: cred.user.uid,
+        email: user.email.trim().toLowerCase(),
+        fullName: displayName,
+        firstName: user.firstName.trim(),
+        lastName: user.lastName.trim(),
+        role: "parent",
+
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: `Account created`,
+      });
+
+      //store all saved user details with parent code, without password
+      await AsyncStorage.setItem(
+        "user",
+        JSON.stringify({
+          uid: cred.user.uid,
+          email: user.email.trim().toLowerCase(),
+          fullName: displayName,
+          firstName: user.firstName.trim(),
+          lastName: user.lastName.trim(),
+          role: "student",
+
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+
+      // Reset local state
+      setUser({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+        role: "student",
+        userID: "", // Reset or generate as needed
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Navigate
+      router.replace("/ChildWelcomeScreen");
+    } catch (e: any) {
+      const code = e?.code || "";
+      let message = e?.message || "Sign up failed.";
+      if (code === "auth/email-already-in-use")
+        message = "This email is already in use.";
+      else if (code === "auth/invalid-email")
+        message = "Invalid email address.";
+      else if (code === "auth/weak-password") message = "Password is too weak.";
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: message,
+        button: "close",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const EyeIcon = ({ visible }: { visible: boolean }) => (
@@ -222,12 +296,17 @@ const ChildSignUp = () => {
             </View>
             <View className="mt-6 w-full">
               <TouchableOpacity
-                className="bg-primary rounded-full p-4"
+                className={`rounded-full p-4 items-center ${loading ? "bg-neutral-300" : "bg-primary"}`}
                 onPress={handleSignUp}
+                disabled={loading}
               >
-                <Text className="text-white text-center text-lg font-medium">
-                  Sign Up
-                </Text>
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white text-center text-lg font-medium">
+                    Sign Up
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
             <View className="mt-4 w-full flex-row justify-center">
