@@ -1,7 +1,8 @@
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard"; // Import Clipboard
-import React, { useState } from "react"; // Import useState
+import React, { useEffect, useState } from "react"; // Import useState
 import { Image, Text, TouchableOpacity, View } from "react-native";
 
 interface HeaderProps {
@@ -11,8 +12,16 @@ interface HeaderProps {
 // Convert to a Functional Component
 const Header = ({ isCode }: HeaderProps) => {
   // Renamed from 'header' to 'Header' (PascalCase for components)
-  const parentCode = "123456";
+  // const parentCode = "123456";
   const [copiedText, setCopiedText] = useState("");
+  const [parentCode, setParentCode] = useState(""); // Default parent code
+  interface User {
+    firstName?: string;
+    parentCode?: string;
+    // Add other properties as needed
+  }
+
+  const [user, setUser] = useState<User>({});
 
   const copyToClipboard = async () => {
     await Clipboard.setStringAsync(parentCode);
@@ -22,12 +31,28 @@ const Header = ({ isCode }: HeaderProps) => {
 
   const currentDate = new Date(); // Get current date once
 
+  useEffect(() => {
+    const fetchData = async () => {
+      const user = await AsyncStorage.getItem("user");
+      if (user) {
+        const parsedUser = JSON.parse(user);
+        setUser(parsedUser);
+        if (parsedUser.parentCode) {
+          setParentCode(parsedUser.parentCode);
+        }
+      }
+    };
+    fetchData();
+  }, []);
+
   return (
     <View className="p-2 pt-4 pb-0">
       <View className="flex-row items-center">
         <Image source={images.parentImage} className="h-12 w-12 rounded-full" />
         <View className="flex-1 items-center justify-center text-center">
-          <Text className="text-2xl font-semibold">Hello Shinny!</Text>
+          <Text className="text-2xl font-semibold">
+            Hello {user.firstName}!
+          </Text>
           <Text className="text-lg text-gray-600 mt-1 text-center">
             Today {currentDate.getDate()}{" "}
             {currentDate.toLocaleDateString("default", { month: "short" })}
