@@ -471,7 +471,7 @@ const StudentCard: React.FC<StudentCardProps> = ({
 const scrollViewBottomPadding = 24;
 const ACTION_BAR_HEIGHT = 72;
 
-const DriverHome: React.FC = () => {
+const BusHome: React.FC = () => {
   const [session, setSession] = useState<RouteSession>("morning");
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [sheetStudentId, setSheetStudentId] = useState<string | null>(null);
@@ -662,4 +662,4 @@ const DriverHome: React.FC = () => {
   );
 };
 
-export default DriverHome;
+export default BusHome;

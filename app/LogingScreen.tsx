@@ -50,7 +50,7 @@ const LoginScreen = () => {
         router.replace("/(tabs)/parent_home");
         break;
       case "bus":
-        router.replace("/(Bus)/(tabs)/driver_home");
+        router.replace("/(Bus)/(tabs)/bus_home");
         break;
       case "student":
         router.replace("/(Child)/(tabs)/child_home");

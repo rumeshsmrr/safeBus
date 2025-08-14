@@ -50,9 +50,9 @@ const _layout = () => {
       }}
     >
       <Tabs.Screen
-        name="driver_home"
+        name="bus_home"
         options={{
-          title: "Driver Home",
+          title: "Bus Home",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={icons.home} title="Home" />

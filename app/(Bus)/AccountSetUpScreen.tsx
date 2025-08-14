@@ -1,3 +1,4 @@
+// app/(Bus)/AccountSetUpScreen.tsx
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -18,21 +19,24 @@ import MapView, {
 } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// Firebase
+import { doc, GeoPoint, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "../lib/firebase"; // <— use alias to src/lib
+
 /* ========================== Types ========================== */
+type Coords = { latitude: number; longitude: number } | null;
+type PickerType = "start" | "end";
+
 interface AccountSetUpInfo {
   firstName: string;
   lastName: string;
   busId: string;
   busNumber: string;
   busNickName: string;
-  // free-text addresses user types
   startAddress: string;
   endAddress: string;
   contactNumber: string;
 }
-
-type Coords = { latitude: number; longitude: number } | null;
-type PickerType = "start" | "end";
 
 /* ======================= Map Picker Modal ======================= */
 interface MapPickerModalProps {
@@ -69,7 +73,6 @@ function MapPickerModal({
     animateTo(c.latitude, c.longitude);
   };
 
-  // reset when closed
   React.useEffect(() => {
     if (!visible) setSelectedCoord(null);
   }, [visible]);
@@ -77,7 +80,6 @@ function MapPickerModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-white">
-        {/* Header */}
         <View className="pt-12 px-4 pb-2">
           <Text className="text-lg font-semibold text-neutral-900">
             Pick location on map
@@ -119,13 +121,8 @@ function MapPickerModal({
             </TouchableOpacity>
             <TouchableOpacity
               disabled={!selectedCoord}
-              onPress={() => {
-                if (!selectedCoord) return;
-                onConfirm(selectedCoord);
-              }}
-              className={`flex-1 items-center py-3 rounded-xl ${
-                selectedCoord ? "bg-blue-600" : "bg-neutral-300"
-              }`}
+              onPress={() => selectedCoord && onConfirm(selectedCoord)}
+              className={`flex-1 items-center py-3 rounded-xl ${selectedCoord ? "bg-blue-600" : "bg-neutral-300"}`}
             >
               <Text className="text-white text-base">Confirm</Text>
             </TouchableOpacity>
@@ -138,7 +135,7 @@ function MapPickerModal({
 
 /* ========================= Main Screen ========================= */
 const DEFAULT_REGION: Region = {
-  latitude: 7.8731, // Sri Lanka center-ish
+  latitude: 7.8731,
   longitude: 80.7718,
   latitudeDelta: 1.2,
   longitudeDelta: 1.2,
@@ -158,7 +155,6 @@ const AccountSetUpScreen: React.FC = () => {
 
   const [startCoords, setStartCoords] = useState<Coords>(null);
   const [endCoords, setEndCoords] = useState<Coords>(null);
-
   const [isLoading, setIsLoading] = useState(false);
 
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -170,36 +166,37 @@ const AccountSetUpScreen: React.FC = () => {
     (async () => {
       try {
         const data = await AsyncStorage.getItem("userData");
+        const baseId = `bus_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         if (data) {
           const u = JSON.parse(data);
           setBusAccount((prev) => ({
             ...prev,
             firstName: u?.firstName || "",
             lastName: u?.lastName || "",
-            busId: `bus_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            busId: prev.busId || baseId,
           }));
+        } else {
+          setBusAccount((prev) => ({ ...prev, busId: prev.busId || baseId }));
         }
       } catch {
-        // non-fatal
+        // ignore
       }
     })();
   }, []);
 
   const openPicker = (type: PickerType) => {
     setPickerType(type);
-
-    // Optionally, center map near previously chosen pin
     const reuse = type === "start" ? startCoords : endCoords;
-    if (reuse) {
-      setPickerRegion({
-        latitude: reuse.latitude,
-        longitude: reuse.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    } else {
-      setPickerRegion(DEFAULT_REGION);
-    }
+    setPickerRegion(
+      reuse
+        ? {
+            latitude: reuse.latitude,
+            longitude: reuse.longitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }
+        : DEFAULT_REGION
+    );
     setPickerVisible(true);
   };
 
@@ -207,16 +204,29 @@ const AccountSetUpScreen: React.FC = () => {
     latitude: number;
     longitude: number;
   }) => {
-    if (pickerType === "start") {
-      setStartCoords(coords);
-    } else {
-      setEndCoords(coords);
-    }
+    if (pickerType === "start") setStartCoords(coords);
+    else setEndCoords(coords);
     setPickerVisible(false);
   };
 
+  const pinChip = (coords: Coords) => (
+    <View
+      className={`self-start mt-1 px-3 py-1 rounded-full ${coords ? "bg-green-100" : "bg-neutral-200"}`}
+    >
+      <Text
+        className={`${coords ? "text-green-800" : "text-neutral-700"} text-xs`}
+      >
+        {coords ? "Pin set" : "No pin yet"}
+      </Text>
+    </View>
+  );
+
+  const normalizePhone = (raw: string) =>
+    raw.replace(/[^\d+]/g, "").replace(/^0/, "+94"); // quick Sri Lanka normalization; tweak as needed
+
   const handleContinue = async () => {
     setIsLoading(true);
+
     const required =
       busAccount.firstName &&
       busAccount.lastName &&
@@ -234,33 +244,66 @@ const AccountSetUpScreen: React.FC = () => {
       return;
     }
 
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      alert("You must be logged in to complete setup.");
+      setIsLoading(false);
+      return;
+    }
+
+    const busId =
+      busAccount.busId ||
+      `bus_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
     const payload = {
-      ...busAccount,
-      startCoords,
-      endCoords,
+      firstName: busAccount.firstName.trim(),
+      lastName: busAccount.lastName.trim(),
+      busId,
+      busNumber: busAccount.busNumber.trim(),
+      busNickName: busAccount.busNickName.trim(),
+      startAddress: busAccount.startAddress.trim(),
+      endAddress: busAccount.endAddress.trim(),
+      contactNumber: normalizePhone(busAccount.contactNumber),
+      startCoords: startCoords
+        ? new GeoPoint(startCoords.latitude, startCoords.longitude)
+        : null,
+      endCoords: endCoords
+        ? new GeoPoint(endCoords.latitude, endCoords.longitude)
+        : null,
+      ownerUid: uid,
+      role: "driver" as const,
+      isSetupComplete: true, // <-- flag
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
 
     try {
+      // 1) Save the bus profile
+      await setDoc(doc(db, "busProfiles", busId), payload, { merge: true });
+
+      // 2) Link user
+      await setDoc(
+        doc(db, "users", uid),
+        {
+          uid,
+          role: "bus",
+          currentBusId: busId,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // 3) Local cache
       await AsyncStorage.setItem("busAccountData", JSON.stringify(payload));
-      router.push("/(Bus)/(tabs)/driver_home");
-    } catch {
-      alert("Failed to save account data.");
+
+      router.replace("/(Bus)/(tabs)/bus_home");
+    } catch (e: any) {
+      console.error("Save bus profile error:", e);
+      alert(e?.message || "Failed to save account data.");
     } finally {
       setIsLoading(false);
     }
   };
-
-  const pinChip = (coords: Coords) => (
-    <View
-      className={`self-start mt-1 px-3 py-1 rounded-full ${coords ? "bg-green-100" : "bg-neutral-200"}`}
-    >
-      <Text
-        className={`${coords ? "text-green-800" : "text-neutral-700"} text-xs`}
-      >
-        {coords ? "Pin set" : "No pin yet"}
-      </Text>
-    </View>
-  );
 
   return (
     <SafeAreaView className="flex-1 bg-[#F6F7FB]">
