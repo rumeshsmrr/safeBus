@@ -1,253 +1,398 @@
-// app/LoginScreen.tsx
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import { router } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
+  Modal,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import MapView, {
+  MapPressEvent,
+  Marker,
+  PROVIDER_GOOGLE,
+  Region,
+} from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Placeholder for router if not using expo-router
-const router = {
-  push: (path: string) => {
-    console.log(`Navigating to: ${path}`);
-    Toast.show({
-      type: ALERT_TYPE.INFO,
-      title: "Navigation",
-      textBody: `Attempted to navigate to ${path}`,
-    });
-  },
-};
-
+/* ========================== Types ========================== */
 interface AccountSetUpInfo {
   firstName: string;
   lastName: string;
   busId: string;
   busNumber: string;
   busNickName: string;
-  startLocation: string;
-  endLocation: string;
+  // free-text addresses user types
+  startAddress: string;
+  endAddress: string;
   contactNumber: string;
 }
 
-const AccountSetUpScreen = () => {
+type Coords = { latitude: number; longitude: number } | null;
+type PickerType = "start" | "end";
+
+/* ======================= Map Picker Modal ======================= */
+interface MapPickerModalProps {
+  visible: boolean;
+  initialRegion: Region;
+  onClose: () => void;
+  onConfirm: (coords: { latitude: number; longitude: number }) => void;
+}
+
+function MapPickerModal({
+  visible,
+  initialRegion,
+  onClose,
+  onConfirm,
+}: MapPickerModalProps) {
+  const mapRef = useRef<MapView | null>(null);
+  const [selectedCoord, setSelectedCoord] = useState<Coords>(null);
+
+  const animateTo = (lat: number, lng: number) => {
+    mapRef.current?.animateToRegion(
+      {
+        latitude: lat,
+        longitude: lng,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      },
+      250
+    );
+  };
+
+  const onMapPress = (e: MapPressEvent) => {
+    const c = e.nativeEvent.coordinate;
+    setSelectedCoord(c);
+    animateTo(c.latitude, c.longitude);
+  };
+
+  // reset when closed
+  React.useEffect(() => {
+    if (!visible) setSelectedCoord(null);
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 bg-white">
+        {/* Header */}
+        <View className="pt-12 px-4 pb-2">
+          <Text className="text-lg font-semibold text-neutral-900">
+            Pick location on map
+          </Text>
+          <Text className="text-neutral-500 mt-1">
+            Tap to drop a pin (drag to adjust)
+          </Text>
+        </View>
+
+        <MapView
+          ref={(r) => {
+            mapRef.current = r;
+          }}
+          style={{ flex: 1 }}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={initialRegion}
+          onPress={onMapPress}
+        >
+          {selectedCoord && (
+            <Marker
+              coordinate={selectedCoord}
+              draggable
+              onDragEnd={(e) => {
+                const c = e.nativeEvent.coordinate;
+                setSelectedCoord(c);
+                animateTo(c.latitude, c.longitude);
+              }}
+            />
+          )}
+        </MapView>
+
+        <View className="p-3">
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              onPress={onClose}
+              className="flex-1 items-center py-3 rounded-xl bg-neutral-400"
+            >
+              <Text className="text-white text-base">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={!selectedCoord}
+              onPress={() => {
+                if (!selectedCoord) return;
+                onConfirm(selectedCoord);
+              }}
+              className={`flex-1 items-center py-3 rounded-xl ${
+                selectedCoord ? "bg-blue-600" : "bg-neutral-300"
+              }`}
+            >
+              <Text className="text-white text-base">Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/* ========================= Main Screen ========================= */
+const DEFAULT_REGION: Region = {
+  latitude: 7.8731, // Sri Lanka center-ish
+  longitude: 80.7718,
+  latitudeDelta: 1.2,
+  longitudeDelta: 1.2,
+};
+
+const AccountSetUpScreen: React.FC = () => {
   const [busAccount, setBusAccount] = useState<AccountSetUpInfo>({
     firstName: "",
     lastName: "",
     busId: "",
     busNumber: "",
     busNickName: "",
-    startLocation: "",
-    endLocation: "",
+    startAddress: "",
+    endAddress: "",
     contactNumber: "",
   });
+
+  const [startCoords, setStartCoords] = useState<Coords>(null);
+  const [endCoords, setEndCoords] = useState<Coords>(null);
+
   const [isLoading, setIsLoading] = useState(false);
 
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerType, setPickerType] = useState<PickerType>("start");
+  const [pickerRegion, setPickerRegion] = useState<Region>(DEFAULT_REGION);
+
+  // Seed from local storage (optional)
   useEffect(() => {
-    const getUserData = async () => {
+    (async () => {
       try {
         const data = await AsyncStorage.getItem("userData");
         if (data) {
-          const parsedData = JSON.parse(data);
-          console.log("Retrieved user data from storage:", parsedData);
+          const u = JSON.parse(data);
           setBusAccount((prev) => ({
             ...prev,
-            firstName: parsedData.firstName || "",
-            lastName: parsedData.lastName || "",
+            firstName: u?.firstName || "",
+            lastName: u?.lastName || "",
             busId: `bus_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           }));
-        } else {
-          console.log("No user data found in storage.");
         }
-      } catch (error) {
-        console.error("Error retrieving user data:", error);
-        Dialog.show({
-          type: ALERT_TYPE.DANGER,
-          title: "Storage Error",
-          textBody: "Failed to load initial user data.",
-          button: "close",
-        });
+      } catch {
+        // non-fatal
       }
-    };
-
-    getUserData();
+    })();
   }, []);
+
+  const openPicker = (type: PickerType) => {
+    setPickerType(type);
+
+    // Optionally, center map near previously chosen pin
+    const reuse = type === "start" ? startCoords : endCoords;
+    if (reuse) {
+      setPickerRegion({
+        latitude: reuse.latitude,
+        longitude: reuse.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      });
+    } else {
+      setPickerRegion(DEFAULT_REGION);
+    }
+    setPickerVisible(true);
+  };
+
+  const handlePickerConfirm = (coords: {
+    latitude: number;
+    longitude: number;
+  }) => {
+    if (pickerType === "start") {
+      setStartCoords(coords);
+    } else {
+      setEndCoords(coords);
+    }
+    setPickerVisible(false);
+  };
 
   const handleContinue = async () => {
     setIsLoading(true);
+    const required =
+      busAccount.firstName &&
+      busAccount.lastName &&
+      busAccount.busNumber &&
+      busAccount.busNickName &&
+      busAccount.startAddress &&
+      busAccount.endAddress &&
+      startCoords &&
+      endCoords &&
+      busAccount.contactNumber;
 
-    if (
-      !busAccount.firstName ||
-      !busAccount.lastName ||
-      !busAccount.busNumber ||
-      !busAccount.busNickName ||
-      !busAccount.startLocation ||
-      !busAccount.endLocation ||
-      !busAccount.contactNumber
-    ) {
-      Dialog.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Please fill in all account setup fields.",
-        button: "close",
-      });
+    if (!required) {
+      alert("Please complete all fields and pick both map pins.");
       setIsLoading(false);
       return;
     }
 
-    Toast.show({
-      type: ALERT_TYPE.SUCCESS,
-      title: "Success",
-      textBody: "Account setup complete!",
-    });
-    setIsLoading(false);
+    const payload = {
+      ...busAccount,
+      startCoords,
+      endCoords,
+    };
+
+    try {
+      await AsyncStorage.setItem("busAccountData", JSON.stringify(payload));
+      router.push("/(Bus)/(tabs)/driver_home");
+    } catch {
+      alert("Failed to save account data.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-light-100">
-      <KeyboardAwareScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 24,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        enableOnAndroid={true}
-        enableAutomaticScroll={Platform.OS === "ios"}
-        extraHeight={130}
-        extraScrollHeight={130}
-        keyboardOpeningTime={250}
+  const pinChip = (coords: Coords) => (
+    <View
+      className={`self-start mt-1 px-3 py-1 rounded-full ${coords ? "bg-green-100" : "bg-neutral-200"}`}
+    >
+      <Text
+        className={`${coords ? "text-green-800" : "text-neutral-700"} text-xs`}
       >
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-2xl font-light text-darkbg mb-10">
-            Set Up Account
-          </Text>
+        {coords ? "Pin set" : "No pin yet"}
+      </Text>
+    </View>
+  );
 
-          <View className="w-full items-start flex-col">
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-2">
-              First Name
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter your first name"
-              textContentType="name"
-              autoCapitalize="words"
-              autoComplete="name"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, firstName: text })
-              }
-              value={busAccount.firstName}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              Last Name
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter your last name"
-              textContentType="name"
-              autoCapitalize="words"
-              autoComplete="name"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, lastName: text })
-              }
-              value={busAccount.lastName}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              Bus Number
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter bus number (e.g., ABC-1234)"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, busNumber: text })
-              }
-              value={busAccount.busNumber}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              Bus Nickname
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter a nickname for the bus"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, busNickName: text })
-              }
-              value={busAccount.busNickName}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              Start Location
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter starting location"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, startLocation: text })
-              }
-              value={busAccount.startLocation}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              End Location
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter ending location"
-              returnKeyType="next"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, endLocation: text })
-              }
-              value={busAccount.endLocation}
-            />
-
-            <Text className="text-lg font-medium text-darkbg mb-2 mt-4">
-              Contact Number
-            </Text>
-            <TextInput
-              className="bg-white rounded-full p-4 w-full"
-              placeholder="Enter contact number"
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              returnKeyType="done"
-              onChangeText={(text) =>
-                setBusAccount({ ...busAccount, contactNumber: text })
-              }
-              value={busAccount.contactNumber}
-            />
-
-            <View className="mt-8 w-full mb-6">
-              <TouchableOpacity
-                className="bg-primary rounded-full p-4"
-                onPress={handleContinue}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-white text-center text-lg font-medium">
-                    Continue
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+  return (
+    <SafeAreaView className="flex-1 bg-[#F6F7FB]">
+      <ScrollView
+        className="px-6"
+        contentContainerStyle={{ paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View className="items-center mt-4 mb-6">
+          <Text className="text-2xl text-neutral-900">Set Up Account</Text>
         </View>
-      </KeyboardAwareScrollView>
+
+        {/* First Name */}
+        <Text className="text-base text-neutral-900 mb-1">First Name</Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-3 text-base"
+          placeholder="Enter your first name"
+          value={busAccount.firstName}
+          onChangeText={(t) => setBusAccount((p) => ({ ...p, firstName: t }))}
+          returnKeyType="next"
+        />
+
+        {/* Last Name */}
+        <Text className="text-base text-neutral-900 mb-1">Last Name</Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-3 text-base"
+          placeholder="Enter your last name"
+          value={busAccount.lastName}
+          onChangeText={(t) => setBusAccount((p) => ({ ...p, lastName: t }))}
+          returnKeyType="next"
+        />
+
+        {/* Bus Number */}
+        <Text className="text-base text-neutral-900 mb-1">Bus Number</Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-3 text-base"
+          placeholder="Enter bus number (e.g., ABC-1234)"
+          value={busAccount.busNumber}
+          onChangeText={(t) => setBusAccount((p) => ({ ...p, busNumber: t }))}
+          returnKeyType="next"
+        />
+
+        {/* Bus Nickname */}
+        <Text className="text-base text-neutral-900 mb-1">Bus Nickname</Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-3 text-base"
+          placeholder="Enter a nickname for the bus"
+          value={busAccount.busNickName}
+          onChangeText={(t) => setBusAccount((p) => ({ ...p, busNickName: t }))}
+          returnKeyType="next"
+        />
+
+        {/* Start Address + Pin */}
+        <Text className="text-base text-neutral-900 mb-1">Start Address</Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-2 text-base"
+          placeholder="Enter the actual start address"
+          value={busAccount.startAddress}
+          onChangeText={(t) =>
+            setBusAccount((p) => ({ ...p, startAddress: t }))
+          }
+          returnKeyType="done"
+        />
+        <View className="flex-row items-center mb-1">
+          <TouchableOpacity
+            className="bg-blue-600 rounded-full px-4 py-3"
+            onPress={() => openPicker("start")}
+          >
+            <Text className="text-white font-semibold">Pick Pin</Text>
+          </TouchableOpacity>
+          <View className="ml-3">{pinChip(startCoords)}</View>
+        </View>
+
+        {/* End Address + Pin */}
+        <Text className="text-base text-neutral-900 mt-4 mb-1">
+          End Address
+        </Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-2 text-base"
+          placeholder="Enter the actual end address"
+          value={busAccount.endAddress}
+          onChangeText={(t) => setBusAccount((p) => ({ ...p, endAddress: t }))}
+          returnKeyType="done"
+        />
+        <View className="flex-row items-center mb-1">
+          <TouchableOpacity
+            className="bg-blue-600 rounded-full px-4 py-3"
+            onPress={() => openPicker("end")}
+          >
+            <Text className="text-white font-semibold">Pick Pin</Text>
+          </TouchableOpacity>
+          <View className="ml-3">{pinChip(endCoords)}</View>
+        </View>
+
+        {/* Contact Number */}
+        <Text className="text-base text-neutral-900 mt-4 mb-1">
+          Contact Number
+        </Text>
+        <TextInput
+          className="bg-white rounded-full px-4 py-3 mb-5 text-base"
+          placeholder="Enter contact number"
+          keyboardType="phone-pad"
+          value={busAccount.contactNumber}
+          onChangeText={(t) =>
+            setBusAccount((p) => ({ ...p, contactNumber: t }))
+          }
+          returnKeyType="done"
+        />
+
+        {/* Continue */}
+        <TouchableOpacity
+          disabled={isLoading}
+          onPress={handleContinue}
+          className={`rounded-full py-4 items-center ${isLoading ? "bg-blue-500/60" : "bg-blue-600"}`}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white text-base font-semibold">Continue</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Map Picker Modal */}
+      {pickerVisible && (
+        <MapPickerModal
+          visible={pickerVisible}
+          initialRegion={pickerRegion}
+          onClose={() => setPickerVisible(false)}
+          onConfirm={handlePickerConfirm}
+        />
+      )}
     </SafeAreaView>
   );
 };

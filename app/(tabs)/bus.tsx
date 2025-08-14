@@ -90,8 +90,9 @@ const Bus = () => {
     },
   ];
 
-  // Filter buses based on search query
-  const filteredBuses = busDetails.filter((bus) => {
+  // Fixed code: Use a conditional check to ensure busDetails is an array.
+  // The '|| []' ensures that if busDetails is undefined, it defaults to an empty array.
+  const filteredBuses = (busDetails || []).filter((bus) => {
     const query = searchQuery.toLowerCase();
     return (
       bus.nickname.toLowerCase().includes(query) ||
@@ -187,7 +188,7 @@ const Bus = () => {
         {/* Bus List */}
         <View className="gap-4">
           {filteredBuses.map((bus, index) => (
-            <View key={index} className="bg-white rounded-xl shadow  h-fit">
+            <View key={index} className="bg-white rounded-xl shadow  h-fit">
               {/* Header Section - Fixed Height */}
               <View className="p-4 flex-row items-start justify-start gap-2 h-[45px]">
                 <Image

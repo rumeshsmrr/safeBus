@@ -49,6 +49,8 @@ export default function RootLayout() {
             options={{ headerShown: false }}
           />
           <Stack.Screen name="busDetails" options={{ headerShown: false }} />
+          {/* <Stack.Screen name="(Bus)" options={{ headerShown: false }} /> */}
+
           <Stack.Screen
             name="(Bus)/AccountSetUpScreen"
             options={{ headerShown: false }}
