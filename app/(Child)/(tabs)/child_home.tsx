@@ -1,6 +1,8 @@
 import Header from "@/app/Components/header";
 import { images } from "@/constants/images";
-import React from "react";
+import { getUserById } from "@/data/users";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect } from "react";
 import {
   Image,
   Modal,
@@ -11,6 +13,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+// ✅ NEW: types + auth fallback
+import { auth } from "@/app/lib/firebase";
+import type { UserDoc } from "@/types/user";
 
 const scrollViewBottomPadding = 24; // Define the padding value
 const driver = {
@@ -68,6 +74,60 @@ const ChildHome = () => {
     setNotifyParentModalVisible(false);
   };
 
+  // ✅ state typed with UserDoc
+  const [child, setChild] = React.useState<UserDoc | null>(null);
+  const [parent, setParent] = React.useState<UserDoc | null>(null);
+
+  // fetch child data from db
+  const fetchChildData = async (userID: string) => {
+    const user = await getUserById(userID);
+    setChild(user);
+  };
+
+  // ✅ 1) Load child: try AsyncStorage 'user' first, fallback to auth.currentUser
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const cached = await AsyncStorage.getItem("user");
+        if (cached) {
+          const parsedUser = JSON.parse(cached);
+          const userID = parsedUser.uid as string | undefined;
+          if (userID) {
+            await fetchChildData(userID);
+            return;
+          }
+        }
+        // fallback: firebase session
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          await fetchChildData(uid);
+        }
+      } catch (e) {
+        console.log("Load child failed:", e);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // ✅ 2) When child is loaded, load parent via child.parentUid (if present)
+  useEffect(() => {
+    (async () => {
+      if (child?.parentUid) {
+        const p = await getUserById(child.parentUid);
+        setParent(p);
+      } else {
+        setParent(null);
+      }
+    })();
+  }, [child?.parentUid]);
+
+  // helper to format parent name without changing UI structure
+  const parentDisplayName =
+    parent?.fullName?.trim() ||
+    [parent?.firstName, parent?.lastName].filter(Boolean).join(" ").trim() ||
+    parent?.email ||
+    "—";
+
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       {/* Main scrollable content area */}
@@ -79,7 +139,12 @@ const ChildHome = () => {
         }}
       >
         <Header isCode={false} />
-        <Text className="text-xl font-light mt-4"> Parent Name : John Doe</Text>
+
+        {/* ⬇️ Only changed the text content to use fetched parent name */}
+        <Text className="text-xl font-light mt-4">
+          Parent Name : {parentDisplayName}
+        </Text>
+
         {childs.map((item) => (
           <View
             key={item.id}
@@ -90,7 +155,7 @@ const ChildHome = () => {
               <View className="flex-row ml-4 flex-1 justify-between items-start">
                 <View className="flex-1">
                   <Text className="text-xl font-semibold text-darkbg capitalize">
-                    {item.name}
+                    {child?.fullName || "Unknown Child"}
                   </Text>
                   <Text className="text-grayText text-base">
                     Madusha School Bus Service
@@ -100,7 +165,15 @@ const ChildHome = () => {
                   </Text>
                 </View>
                 <Text
-                  className={`text-gray-600 px-4 py-2 ${item.status === "On Bus" ? "bg-yellow-300" : item.status === "Dropped" ? "bg-green-300" : item.status === "AB" ? "bg-red-300" : ""} rounded-full`}
+                  className={`text-gray-600 px-4 py-2 ${
+                    item.status === "On Bus"
+                      ? "bg-yellow-300"
+                      : item.status === "Dropped"
+                        ? "bg-green-300"
+                        : item.status === "AB"
+                          ? "bg-red-300"
+                          : ""
+                  } rounded-full`}
                 >
                   {item.status}
                 </Text>
@@ -126,6 +199,7 @@ const ChildHome = () => {
             </View>
           </View>
         ))}
+
         <View className="mt-6 w-full items-center">
           <TouchableOpacity
             className="w-full h-[300px] rounded-xl bg-redsh gap-2 text-darkbg flex-1 justify-center items-center"
@@ -136,6 +210,7 @@ const ChildHome = () => {
             <Text className="text-lg font-light">Press and Hold</Text>
           </TouchableOpacity>
         </View>
+
         <View className="flex-row flex-wrap justify-between mt-6 w-full">
           <TouchableOpacity
             className="w-[48%] bg-yellowsh rounded-xl shadow-md px-4 py-6 mb-4 justify-center items-center flex-shrink-0"
@@ -214,7 +289,9 @@ const ChildHome = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className={`rounded-lg px-10 min-w-[48%]  py-4 ${message.trim() ? "bg-greensh" : "bg-gray-300"}`}
+                className={`rounded-lg px-10 min-w-[48%]  py-4 ${
+                  message.trim() ? "bg-greensh" : "bg-gray-300"
+                }`}
                 onPress={() => {
                   console.log("Notify Driver Confirmed:", message);
                   setMessage("");
@@ -230,6 +307,8 @@ const ChildHome = () => {
           </View>
         </View>
       </Modal>
+
+      {/* notify parent modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -283,7 +362,9 @@ const ChildHome = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className={`rounded-lg px-10 min-w-[48%]  py-4 ${message.trim() ? "bg-greensh" : "bg-gray-300"}`}
+                className={`rounded-lg px-10 min-w-[48%]  py-4 ${
+                  message.trim() ? "bg-greensh" : "bg-gray-300"
+                }`}
                 onPress={() => {
                   console.log("Notify Parent Confirmed:", message);
                   setMessage("");
