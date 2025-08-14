@@ -552,9 +552,9 @@ const BusHome: React.FC = () => {
           <Header isCode={false} />
 
           {/* Date (optional) */}
-          <View className="mt-2">
+          {/* <View className="mt-2">
             <Text className="text-[12px] text-neutral-500">{dateText}</Text>
-          </View>
+          </View> */}
 
           {/* Session toggle */}
           <View className="mt-3 mb-4 flex-row items-center justify-center w-full gap-2">
