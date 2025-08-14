@@ -1,13 +1,21 @@
 // app/LoginScreen.tsx
 import { icons } from "@/constants/icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   ScrollView,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,30 +24,38 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "./context/AuthContext";
 
+const STORAGE_KEY = "userData";
+
 const LoginScreen = () => {
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [secure, setSecure] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [isCheckingStorage, setIsCheckingStorage] = useState(true);
+  const [error, setError] = useState("");
 
-  // Check for stored user data on component mount
+  // Simple form validation
+  const emailValid = useMemo(
+    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()),
+    [email]
+  );
+  const passwordValid = password.trim().length >= 6;
+  const formValid = emailValid && passwordValid;
+
   useEffect(() => {
     checkStoredUser();
   }, []);
 
   const checkStoredUser = async () => {
     try {
-      const storedUser = await AsyncStorage.getItem("user");
-      console.log("Stored user data:", storedUser);
+      const storedUser = await AsyncStorage.getItem(STORAGE_KEY); // FIX: read the same key you write
       if (storedUser) {
         const userData = JSON.parse(storedUser);
-        console.log("Found stored user:", userData);
         redirectBasedOnRole(userData.role);
       }
-    } catch (error) {
-      console.error("Error checking stored user:", error);
+    } catch (e) {
+      console.error("Error checking stored user:", e);
     } finally {
       setIsCheckingStorage(false);
     }
@@ -64,58 +80,47 @@ const LoginScreen = () => {
 
   const storeUserData = async (userData: any) => {
     try {
-      await AsyncStorage.setItem("userData", JSON.stringify(userData));
-      console.log("User data stored successfully");
-    } catch (error) {
-      console.error("Error storing user data:", error);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    } catch (e) {
+      console.error("Error storing user data:", e);
     }
   };
 
   const handleLogin = async () => {
-    setError("");
-    setLoading(true);
-
-    // Simulate API call delay for better UX
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    try {
-      const loggedInUser = await login(email, password);
-
-      if (loggedInUser) {
-        console.log("role", loggedInUser.role);
-
-        // Store user data in AsyncStorage
-        await storeUserData(loggedInUser);
-
-        // Redirect based on role
-        redirectBasedOnRole(loggedInUser.role);
-
-        setEmail("");
-        setPassword("");
-        setLoading(false);
-      } else {
-        setError("Invalid email or password. Please try again.");
-      }
-    } catch (error) {
-      setError("An error occurred during login. Please try again.");
-      console.error("Login error:", error);
+    if (!formValid) {
+      setError(
+        !emailValid
+          ? "Please enter a valid email."
+          : "Password must be at least 6 characters."
+      );
+      return;
     }
 
-    setLoading(false);
+    setError("");
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 300)); // small UX delay
+
+    try {
+      const loggedInUser = await login(email.trim(), password);
+      if (loggedInUser) {
+        await storeUserData(loggedInUser);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        redirectBasedOnRole(loggedInUser.role);
+        setEmail("");
+        setPassword("");
+      } else {
+        setError("Invalid email or password. Please try again.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch (e) {
+      console.error("Login error:", e);
+      setError("An error occurred during login. Please try again.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleTempararyLogin = (role: string) => {
-    setEmail(
-      role === "parent" ? "p@e.com" : role === "bus" ? "b@e.com" : "st@e.com"
-    );
-    setPassword("123456");
-    console.log("Temparary login for role:", role);
-    console.log("temparary login email:", email);
-    console.log("temparary login password:", password);
-    handleLogin();
-  };
-
-  // Show loading screen while checking stored user data
   if (isCheckingStorage) {
     return (
       <SafeAreaView className="flex-1 bg-light-100 justify-center items-center">
@@ -126,116 +131,216 @@ const LoginScreen = () => {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-light-100 justify-center items-center p-6">
-      <ScrollView showsVerticalScrollIndicator={false} className="w-full">
-        <View className="w-full justify-center items-center my-8">
-          <Image
-            source={icons.logo}
-            className="w-32 h-32 mb-4"
-            resizeMode="contain"
-          />
-          <Text className="text-primary text-4xl font-bold text-center">
-            Welcome Back!
-          </Text>
-          <Text className="text-gray-600 text-lg mt-2 text-center">
-            Log in to your SafeBus account
-          </Text>
-        </View>
+    <View className="flex-1">
+      <StatusBar barStyle="light-content" />
+      {/* Brand gradient background */}
+      <LinearGradient
+        colors={["#0ea5e9", "#2563eb", "#1e293b"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: "absolute", inset: 0 }}
+      />
 
-        <View className="w-full mt-8">
-          <Text className="text-base font-semibold text-gray-700 mb-2">
-            Email
-          </Text>
-          <TextInput
-            className="w-full p-4 bg-white rounded-lg border border-gray-300 text-base"
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-            editable={!loading}
-          />
-
-          <Text className="text-base font-semibold text-gray-700 mt-4 mb-2">
-            Password
-          </Text>
-          <TextInput
-            className="w-full p-4 bg-white rounded-lg border border-gray-300 text-base"
-            placeholder="Enter your password"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            editable={!loading}
-          />
-
-          {error ? (
-            <Text className="text-red-500 text-sm mt-2 text-center">
-              {error}
-            </Text>
-          ) : null}
-
-          <TouchableOpacity
-            className={`w-full p-4 rounded-lg mt-8 ${loading ? "bg-gray-400" : "bg-primary"} items-center`}
-            onPress={handleLogin}
-            disabled={loading}
+      <SafeAreaView className="flex-1">
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text className="text-white text-lg font-bold">Log In</Text>
-            )}
-          </TouchableOpacity>
+            {/* Header */}
+            <View className="items-center mt-6">
+              <Image
+                source={icons.logo}
+                className="w-28 h-28 mb-3"
+                resizeMode="contain"
+              />
+              <Text className="text-white text-3xl font-extrabold">
+                Welcome back
+              </Text>
+              <Text className="text-white/80 text-base mt-1">
+                Log in to your SafeBus account
+              </Text>
+            </View>
 
-          <TouchableOpacity className="mt-4 items-center">
-            <Text className="text-primary text-base">Forgot Password?</Text>
-          </TouchableOpacity>
+            {/* Glass card */}
+            <BlurView intensity={40} tint="light" className="mt-8 rounded-2xl">
+              <View className="p-5 bg-white/70 rounded-2xl">
+                {/* Email */}
+                <Text className="text-gray-800 font-semibold mb-2">Email</Text>
+                <View className="flex-row items-center rounded-xl border border-gray-300 bg-white">
+                  <View className="pl-3">
+                    <Ionicons
+                      name="mail-outline"
+                      size={20}
+                      color={
+                        emailValid || email.length === 0 ? "#64748b" : "#ef4444"
+                      }
+                    />
+                  </View>
+                  <TextInput
+                    className="flex-1 p-4 text-base"
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={setEmail}
+                    editable={!loading}
+                    placeholderTextColor="#94a3b8"
+                  />
+                  {email.length > 0 && (
+                    <View className="pr-3">
+                      <MaterialCommunityIcons
+                        name={emailValid ? "check-circle" : "close-circle"}
+                        size={20}
+                        color={emailValid ? "#10b981" : "#ef4444"}
+                      />
+                    </View>
+                  )}
+                </View>
 
-          <View className="flex-row justify-center mt-6">
-            <Text className="text-gray-600 text-base">
-              Don&apos;t have an account?{" "}
-            </Text>
-            <Text
-              className="text-primary text-base font-semibold"
-              onPress={() => router.push("/SignUpMenuScreen")}
-            >
-              Sign Up
-            </Text>
-          </View>
+                {/* Password */}
+                <Text className="text-gray-800 font-semibold mt-4 mb-2">
+                  Password
+                </Text>
+                <View className="flex-row items-center rounded-xl border border-gray-300 bg-white">
+                  <View className="pl-3">
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={20}
+                      color={
+                        passwordValid || password.length === 0
+                          ? "#64748b"
+                          : "#ef4444"
+                      }
+                    />
+                  </View>
+                  <TextInput
+                    className="flex-1 p-4 text-base"
+                    placeholder="Enter your password"
+                    secureTextEntry={secure}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!loading}
+                    placeholderTextColor="#94a3b8"
+                  />
+                  <Pressable
+                    className="pr-3 py-3"
+                    onPress={() => setSecure((s) => !s)}
+                    hitSlop={10}
+                  >
+                    <Ionicons
+                      name={secure ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#64748b"
+                    />
+                  </Pressable>
+                </View>
 
-          {/* Temporary easy login buttons */}
-          <TouchableOpacity
-            className="mt-4 items-center"
-            onPress={() => {
-              handleTempararyLogin("parent");
-            }}
-          >
-            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
-              parent{" "}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="mt-4 items-center"
-            onPress={() => {
-              handleTempararyLogin("bus");
-            }}
-          >
-            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
-              bus{" "}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="mt-4 items-center"
-            onPress={() => {
-              handleTempararyLogin("student");
-            }}
-          >
-            <Text className="text-primary text-base font-semibold bg-slate-400 py-2 px-4 rounded">
-              student{" "}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+                {/* Error banner */}
+                {!!error && (
+                  <View className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3">
+                    <Text className="text-red-600 text-sm text-center">
+                      {error}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Forgot password
+                <TouchableOpacity
+                  className="mt-3 self-end"
+                  disabled={loading}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push("/ForgotPassword"); // adjust if needed
+                  }}
+                >
+                  <Text className="text-primary font-semibold">Forgot Password?</Text>
+                </TouchableOpacity> */}
+
+                {/* Login button (gradient) */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  disabled={loading || !formValid}
+                  className="mt-6 rounded-xl overflow-hidden"
+                  onPress={handleLogin}
+                >
+                  <LinearGradient
+                    colors={
+                      loading || !formValid
+                        ? ["#94a3b8", "#94a3b8"]
+                        : ["#0ea5e9", "#2563eb"]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ paddingVertical: 16, alignItems: "center" }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-white text-lg font-bold">
+                        Log In
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Divider */}
+                {/* <View className="flex-row items-center my-5">
+                  <View className="flex-1 h-px bg-gray-300" />
+                  <Text className="mx-2 text-gray-500 text-sm">or</Text>
+                  <View className="flex-1 h-px bg-gray-300" />
+                </View> */}
+
+                {/* Social (placeholders) */}
+                {/* <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    className="flex-1 rounded-xl border border-gray-300 bg-white p-3 items-center"
+                    disabled
+                  >
+                    <Text className="text-gray-700 font-semibold">
+                      Continue with Google
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 rounded-xl border border-gray-300 bg-white p-3 items-center"
+                    disabled
+                  >
+                    <Text className="text-gray-700 font-semibold">
+                      Continue with Apple
+                    </Text>
+                  </TouchableOpacity>
+                </View> */}
+
+                {/* Sign up */}
+                <View className="flex-row justify-center mt-6">
+                  <Text className="text-gray-700">Don’t have an account? </Text>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      router.push("/SignUpMenuScreen");
+                    }}
+                  >
+                    <Text className="text-primary font-semibold">Sign Up</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </BlurView>
+
+            {/* Footer note */}
+            <View className="items-center mt-6">
+              <Text className="text-white/70 text-xs">
+                By continuing you agree to our Terms & Privacy Policy
+              </Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 };
 
