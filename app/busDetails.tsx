@@ -61,7 +61,8 @@ const RouteIndicator = ({
 const scrollViewBottomPadding = 32;
 
 const BusDetails = () => {
-  const { busId } = useLocalSearchParams<{ busId: string }>();
+  const { docId } = useLocalSearchParams<{ docId: string }>();
+  console.log("Bus ID:", docId);
 
   const [bus, setBus] = useState<(BusProfile & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,13 +81,13 @@ const BusDetails = () => {
 
   // ---- subscribe to bus & children ----
   useEffect(() => {
-    if (!busId) return;
-    const unsub = subscribeBusProfileById(String(busId), (b) => {
+    if (!docId) return;
+    const unsub = subscribeBusProfileById(String(docId), (b) => {
       setBus(b);
       setLoading(false);
     });
     return () => unsub?.();
-  }, [busId]);
+  }, [docId]);
 
   useEffect(() => {
     const unsub = subscribeMyChildren((kids) => setChildren(kids));
@@ -106,12 +107,12 @@ const BusDetails = () => {
 
   // ---- actions ----
   const sendAddChildRequest = async () => {
-    if (!busId || !selectedChildUid) {
+    if (!docId || !selectedChildUid) {
       Alert.alert("Select a child first");
       return;
     }
     try {
-      await requestAddChildToBus(String(busId), selectedChildUid);
+      await requestAddChildToBus(String(docId), selectedChildUid);
       Alert.alert("Request sent", "Your request is pending approval.");
       setIsAddChildModalVisible(false);
       setSelectedChildUid(null);
