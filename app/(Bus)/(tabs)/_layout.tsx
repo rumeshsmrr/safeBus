@@ -60,6 +60,16 @@ const _layout = () => {
         }}
       />
       <Tabs.Screen
+        name="BusJoinRequests"
+        options={{
+          title: "Requests",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.bus} title="Bus" />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Driver Profile",
