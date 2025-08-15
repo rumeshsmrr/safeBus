@@ -1,9 +1,8 @@
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Clipboard from "expo-clipboard"; // Import Clipboard
 import React, { useEffect, useState } from "react"; // Import useState
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, View } from "react-native";
 
 interface HeaderProps {
   isCode?: boolean; // Optional prop to determine if parent code should be displayed
@@ -13,8 +12,8 @@ interface HeaderProps {
 const Header = ({ isCode }: HeaderProps) => {
   // Renamed from 'header' to 'Header' (PascalCase for components)
   // const parentCode = "123456";
-  const [copiedText, setCopiedText] = useState("");
-  const [parentCode, setParentCode] = useState(""); // Default parent code
+  // const [copiedText, setCopiedText] = useState("");
+  // const [parentCode, setParentCode] = useState(""); // Default parent code
   interface User {
     name?: string;
     firstName?: string;
@@ -24,11 +23,11 @@ const Header = ({ isCode }: HeaderProps) => {
 
   const [user, setUser] = useState<User>({});
 
-  const copyToClipboard = async () => {
-    await Clipboard.setStringAsync(parentCode);
-    setCopiedText("Copied!");
-    setTimeout(() => setCopiedText(""), 2000);
-  };
+  // const copyToClipboard = async () => {
+  //   await Clipboard.setStringAsync(parentCode);
+  //   setCopiedText("Copied!");
+  //   setTimeout(() => setCopiedText(""), 2000);
+  // };
 
   const currentDate = new Date(); // Get current date once
 
@@ -40,9 +39,9 @@ const Header = ({ isCode }: HeaderProps) => {
         const parsedUser = JSON.parse(user);
         console.log(parsedUser);
         setUser(parsedUser);
-        if (parsedUser.parentCode) {
-          setParentCode(parsedUser.parentCode);
-        }
+        // if (parsedUser.parentCode) {
+        //   setParentCode(parsedUser.parentCode);
+        // }
       }
     };
     fetchData();
@@ -67,7 +66,7 @@ const Header = ({ isCode }: HeaderProps) => {
           />
         </View>
       </View>
-      {isCode && (
+      {/* {isCode && (
         <View className="flex-row items-center justify-start gap-4 mt-4">
           <Text className="text-xl font-semibold text-gray-600">
             Parent Code :
@@ -86,7 +85,7 @@ const Header = ({ isCode }: HeaderProps) => {
             <Text className="text-green-500 text-sm ml-2">{copiedText}</Text>
           ) : null}
         </View>
-      )}
+      )} */}
     </View>
   );
 };

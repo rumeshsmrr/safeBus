@@ -1,21 +1,25 @@
 // data/users.ts
 import { auth, db } from "@/app/lib/firebase";
-import { UserDoc, displayNameOf } from "@/types/user";
+import { GeoAddress, UserDoc, displayNameOf } from "@/types/user";
 import { Unsubscribe } from "firebase/auth";
 import {
   DocumentSnapshot,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
   limit,
   onSnapshot,
   query,
+  serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
 const USERS = "users";
 
+// data/users.ts
 function toUserDoc(snap: DocumentSnapshot): UserDoc | null {
   if (!snap.exists()) return null;
   const data = snap.data() as any;
@@ -31,6 +35,10 @@ function toUserDoc(snap: DocumentSnapshot): UserDoc | null {
     currentBusId: data.currentBusId ?? null,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
+
+    // ✅ include these so the subscription returns them
+    homeLocation: data.homeLocation ?? null,
+    schoolLocation: data.schoolLocation ?? null,
   };
   return user;
 }
@@ -152,4 +160,37 @@ export function subscribeMyChildren(
   const uid = auth.currentUser?.uid;
   if (!uid) return null;
   return subscribeChildrenByParentUid(uid, cb);
+}
+
+/** Update either/both locations (atomic partial update) */
+export async function updateChildLocations(
+  childUid: string,
+  payload: {
+    home?: GeoAddress | null; // pass null to remove the field
+    school?: GeoAddress | null; // pass null to remove the field
+  }
+) {
+  const ref = doc(db, "users", childUid);
+  const data: any = { updatedAt: serverTimestamp() };
+  if (payload.home !== undefined) {
+    data.homeLocation = payload.home ?? deleteField();
+  }
+  if (payload.school !== undefined) {
+    data.schoolLocation = payload.school ?? deleteField();
+  }
+  await updateDoc(ref, data);
+}
+
+/** Convenience helpers */
+export async function updateChildHomeLocation(
+  childUid: string,
+  home: GeoAddress | null
+) {
+  return updateChildLocations(childUid, { home });
+}
+export async function updateChildSchoolLocation(
+  childUid: string,
+  school: GeoAddress | null
+) {
+  return updateChildLocations(childUid, { school });
 }

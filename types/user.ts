@@ -1,5 +1,9 @@
 export type UserRole = "parent" | "bus" | "student";
-
+export interface GeoAddress {
+  address: string;
+  latitude: number;
+  longitude: number;
+}
 export interface UserDoc {
   uid: string;
   role: UserRole;
@@ -16,6 +20,10 @@ export interface UserDoc {
   // timestamps (Firestore)
   createdAt?: any;
   updatedAt?: any;
+
+  // NEW
+  homeLocation?: GeoAddress | null;
+  schoolLocation?: GeoAddress | null;
 }
 
 /** Prefer fullName; fallback to first + last; then email; then "User" */
