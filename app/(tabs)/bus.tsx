@@ -1,4 +1,6 @@
 // app/BusList.tsx
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -7,12 +9,12 @@ import {
   Image,
   Linking,
   RefreshControl,
-  SafeAreaView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { images } from "@/constants/images";
 import {
@@ -22,22 +24,7 @@ import {
 } from "@/data/busProfiles";
 import Header from "../Components/header";
 
-const scrollViewBottomPadding = 24;
-
-const Chip = ({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: (q: string) => void;
-}) => (
-  <TouchableOpacity
-    className="px-3 py-1.5 rounded-full bg-white border border-gray-200 mr-2 mb-2"
-    onPress={() => onPress(label)}
-  >
-    <Text className="text-gray-700 text-xs">{label}</Text>
-  </TouchableOpacity>
-);
+const PADDING_BOTTOM = 24;
 
 const RatingPill = ({
   avg = 0,
@@ -53,6 +40,28 @@ const RatingPill = ({
   </View>
 );
 
+const Chip = ({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: (q: string) => void;
+}) => (
+  <TouchableOpacity
+    className="px-3 py-1.5 rounded-full bg-white border border-gray-200 mr-2 mb-2"
+    onPress={() => onPress(label)}
+    activeOpacity={0.9}
+  >
+    <Text className="text-gray-700 text-xs">{label}</Text>
+  </TouchableOpacity>
+);
+
+const DividerDot = () => (
+  <View className="flex-row items-center mx-2">
+    <MaterialCommunityIcons name="dots-horizontal" size={18} color="#9ca3af" />
+  </View>
+);
+
 const BusCard = ({
   bus,
   onPress,
@@ -63,27 +72,35 @@ const BusCard = ({
   onCall?: () => void;
 }) => (
   <TouchableOpacity
-    activeOpacity={0.9}
+    activeOpacity={0.92}
     onPress={onPress}
     className="bg-white rounded-2xl shadow px-4 pt-4 pb-3"
   >
     {/* Top row: icon + title + rating */}
     <View className="flex-row items-start">
-      <View className="w-10 h-10 bg-[#E8F0FF] rounded-xl items-center justify-center mr-3">
+      <LinearGradient
+        colors={["#DCEBFF", "#B8D6FF"]}
+        start={{ x: 0, y: 1 }}
+        end={{ x: 1, y: 0 }}
+        className="w-10 h-10 rounded-xl items-center justify-center mr-3"
+      >
         <Image
           source={images.bus}
           style={{ width: 20, height: 20 }}
           resizeMode="contain"
         />
-      </View>
+      </LinearGradient>
 
       <View className="flex-1" style={{ minWidth: 0 }}>
         <Text className="text-[17px] font-semibold" numberOfLines={1}>
           {bus.busNickName || "Unnamed Bus"}
         </Text>
-        <Text className="text-gray-500 mt-0.5" numberOfLines={1}>
-          {bus.busNumber || bus.busId}
-        </Text>
+        <View className="flex-row items-center gap-1 mt-0.5">
+          <Ionicons name="card-outline" size={12} color="#6b7280" />
+          <Text className="text-gray-500" numberOfLines={1}>
+            {bus.busNumber || bus.busId}
+          </Text>
+        </View>
       </View>
 
       <RatingPill avg={bus.ratingAvg ?? 0} count={bus.ratingCount ?? 0} />
@@ -92,15 +109,17 @@ const BusCard = ({
     {/* Route */}
     <View className="flex-row items-center mt-3">
       <View className="flex-row items-center flex-1" style={{ minWidth: 0 }}>
-        <Image source={images.location} style={{ width: 12, height: 12 }} />
-        <Text className="text-gray-600 ml-2" numberOfLines={1}>
+        <Ionicons name="location-outline" size={14} color="#374151" />
+        <Text className="text-gray-700 ml-1.5 flex-1" numberOfLines={1}>
           {bus.startAddress || "-"}
         </Text>
       </View>
-      <View className="h-[2px] w-[40px] bg-gray-200 mx-8" />
+
+      <DividerDot />
+
       <View className="flex-row items-center flex-1" style={{ minWidth: 0 }}>
-        <Image source={images.location} style={{ width: 12, height: 12 }} />
-        <Text className="text-gray-600 ml-2" numberOfLines={1}>
+        <Ionicons name="flag-outline" size={14} color="#374151" />
+        <Text className="text-gray-700 ml-1.5 flex-1" numberOfLines={1}>
           {bus.endAddress || "-"}
         </Text>
       </View>
@@ -111,14 +130,24 @@ const BusCard = ({
       <Text className="text-gray-500 flex-1" numberOfLines={1}>
         {bus.contactNumber || ""}
       </Text>
-      <View className="flex-row gap-4">
+      <View className="flex-row gap-5">
         {!!bus.contactNumber && (
-          <TouchableOpacity onPress={onCall}>
+          <TouchableOpacity
+            onPress={onCall}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <Ionicons name="call-outline" size={16} color="#0E59FF" />
             <Text className="text-primary">Call</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={onPress}>
+        <TouchableOpacity
+          onPress={onPress}
+          className="flex-row items-center gap-1"
+          hitSlop={8}
+        >
           <Text className="text-primary">View</Text>
+          <Ionicons name="chevron-forward" size={16} color="#0E59FF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -153,7 +182,7 @@ const BusList = () => {
     return filterBuses(buses, searchQuery);
   }, [buses, searchQuery]);
 
-  // quick chips from frequent start/end addresses (top 6)
+  // Quick chips: frequent start/end addresses (top 6)
   const chips = useMemo(() => {
     const all = new Map<string, number>();
     (buses ?? []).forEach((b) => {
@@ -168,63 +197,60 @@ const BusList = () => {
   }, [buses]);
 
   const openDetails = (docId: string) =>
-    router.push(`/busDetails?docId=${encodeURIComponent(docId)}`); // ✅ pass Firestore doc id
+    router.push(`/busDetails?docId=${encodeURIComponent(docId)}`);
 
   const onRefresh = () => {
-    // Realtime sub already keeps fresh; just show a quick spinner
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
+    setTimeout(() => setRefreshing(false), 550);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-[#E7F1FF]">
-      <FlatList
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: scrollViewBottomPadding,
-        }}
-        ListHeaderComponent={
-          <>
-            <Header isCode={false} />
-            {/* Title + search toggle */}
-            <View className="flex-row items-center justify-between mt-2 mb-1">
-              <Text className="text-2xl font-light">Find a Bus</Text>
-              <TouchableOpacity
-                onPress={() => setIsSearchVisible((v) => !v)}
-                className="w-11 h-11 rounded-full bg-white items-center justify-center shadow"
-              >
-                <Image
-                  source={images.searchImg}
-                  style={{ width: 22, height: 22 }}
-                />
-              </TouchableOpacity>
+      {/* Hero */}
+      <LinearGradient
+        colors={["#D9E8FF", "#9fc3f5"]}
+        start={{ x: 0, y: 1 }}
+        end={{ x: 1, y: 0 }}
+        className="px-4 pt-2 pb-5"
+        style={{ borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
+      >
+        <Header isCode={false} />
+
+        <View className="flex-row items-center justify-between mt-2">
+          <Text className="text-2xl font-light text-[#0b1736]">Find a Bus</Text>
+          <TouchableOpacity
+            onPress={() => setIsSearchVisible((v) => !v)}
+            className="w-11 h-11 rounded-full bg-white items-center justify-center shadow"
+          >
+            <Image
+              source={images.searchImg}
+              style={{ width: 22, height: 22 }}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {isSearchVisible && (
+          <View className="mt-3">
+            <View className="bg-white rounded-full px-4 py-3 shadow relative">
+              <TextInput
+                placeholder="Search by bus name, number, or location…"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  className="absolute right-4 top-3"
+                >
+                  <Text className="text-gray-500 text-lg">✕</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* Search */}
-            {isSearchVisible && (
-              <View className="mb-3 relative">
-                <TextInput
-                  className="bg-white rounded-full px-4 py-3 pr-12 shadow"
-                  placeholder="Search by bus name, number, or location…"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  returnKeyType="search"
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchQuery("")}
-                    className="absolute right-4 top-3"
-                  >
-                    <Text className="text-gray-500 text-lg">✕</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Quick chips */}
+            {/* Chips */}
             {chips.length > 0 && (
-              <View className="flex-row flex-wrap mb-3">
+              <View className="flex-row flex-wrap mt-2">
                 {chips.map((c) => (
                   <Chip key={c} label={c} onPress={(q) => setSearchQuery(q)} />
                 ))}
@@ -232,14 +258,23 @@ const BusList = () => {
             )}
 
             {/* Result count */}
-            {!loading && isSearchVisible && searchQuery.trim().length > 0 && (
-              <Text className="text-gray-600 text-xs mb-2">
+            {!loading && searchQuery.trim().length > 0 && (
+              <Text className="text-gray-700 text-xs mt-2">
                 {filtered.length} result{filtered.length === 1 ? "" : "s"} for “
                 {searchQuery}”
               </Text>
             )}
-          </>
-        }
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* List */}
+      <FlatList
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: PADDING_BOTTOM,
+        }}
         data={loading ? [] : filtered}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
@@ -247,10 +282,10 @@ const BusList = () => {
             <BusCard
               bus={item}
               onPress={() => openDetails(item.id)}
-              onCall={() => {
-                if (item.contactNumber)
-                  Linking.openURL(`tel:${item.contactNumber}`);
-              }}
+              onCall={() =>
+                item.contactNumber &&
+                Linking.openURL(`tel:${item.contactNumber}`)
+              }
             />
           </View>
         )}
@@ -262,9 +297,9 @@ const BusList = () => {
             </View>
           ) : (
             <View className="items-center justify-center py-16">
-              <Text className="text-gray-600">No buses found.</Text>
+              <Text className="text-gray-700 text-base">No buses found</Text>
               {searchQuery ? (
-                <Text className="text-gray-400 text-sm mt-1">
+                <Text className="text-gray-500 text-sm mt-1">
                   Try different keywords or clear your search.
                 </Text>
               ) : null}

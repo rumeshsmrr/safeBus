@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -14,72 +15,111 @@ import {
 } from "react-native";
 
 import { images } from "@/constants/images";
-import Header2 from "./Components/header2"; // keep if you use it; or remove to rely on the greeting header
+import Header2 from "./Components/header2";
 
 import { requestAddChildToBus } from "@/data/busChildren";
 import { BusProfile, subscribeBusProfileById } from "@/data/busProfiles";
 import { subscribeMyChildren } from "@/data/users";
 import type { UserDoc } from "@/types/user";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-// ----------- small helpers -----------
-const todayLabel = () => {
-  const d = new Date();
-  const day = d.getDate();
-  const shortMonth = d.toLocaleString("en-US", { month: "short" });
-  const weekday = d.toLocaleString("en-US", { weekday: "long" });
-  // “Today 25 Nov.” if it’s today; else “Mon 25 Nov.”
-  const isToday =
-    new Date().toDateString() === d.toDateString()
-      ? "Today"
-      : weekday.slice(0, 3);
-  return `${isToday} ${day} ${shortMonth}.`;
+/* ----------------------------- small UI helpers ----------------------------- */
+const Divider = () => <View className="h-[1px] bg-neutral-200 my-4" />;
+
+const Chip = ({
+  icon,
+  text,
+  tone = "neutral",
+}: {
+  icon?: React.ReactNode;
+  text: string;
+  tone?: "neutral" | "blue" | "green";
+}) => {
+  const toneCls =
+    tone === "blue"
+      ? "bg-blue-50 border-blue-200"
+      : tone === "green"
+        ? "bg-emerald-50 border-emerald-200"
+        : "bg-neutral-50 border-neutral-200";
+  const textCls =
+    tone === "blue"
+      ? "text-blue-700"
+      : tone === "green"
+        ? "text-emerald-700"
+        : "text-neutral-700";
+  return (
+    <View
+      className={`flex-row items-center gap-1 px-3 py-1.5 rounded-full border ${toneCls}`}
+    >
+      {icon}
+      <Text className={`text-[12px] ${textCls}`} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
+  );
 };
 
-const Divider = () => <View className="h-[1px] bg-gray-300 my-4" />;
-
-const RouteIndicator = ({
+const RoutePill = ({
   start,
   end,
 }: {
   start?: string | null;
   end?: string | null;
 }) => (
-  <View className="flex-col items-end">
-    <Text className="font-light text-grayText" numberOfLines={1}>
-      {start || "-"}
-    </Text>
-    <View className="items-center my-1">
-      <View className="w-[3px] h-10 bg-blue-700 rounded-full" />
-    </View>
-    <Text className="font-light text-grayText" numberOfLines={1}>
-      {end || "-"}
-    </Text>
+  <View className="flex-row items-center gap-2">
+    <Chip
+      tone="blue"
+      icon={<Ionicons name="location-outline" size={14} color="#2563eb" />}
+      text={start || "-"}
+    />
+    <MaterialCommunityIcons name="dots-horizontal" size={18} color="#9ca3af" />
+    <Chip
+      tone="green"
+      icon={<Ionicons name="flag-outline" size={14} color="#047857" />}
+      text={end || "-"}
+    />
   </View>
 );
 
-// ----------- main -----------
+const Stat = ({ value, label }: { value: string; label: string }) => (
+  <View className="items-center px-3">
+    <Text className="text-xl font-semibold text-neutral-900">{value}</Text>
+    <Text className="text-[12px] text-neutral-500">{label}</Text>
+  </View>
+);
+
+const Card = ({ children }: { children: React.ReactNode }) => (
+  <View className="bg-white rounded-2xl p-5 shadow">{children}</View>
+);
+
+/* ---------------------------------- screen ---------------------------------- */
+
 const scrollViewBottomPadding = 32;
 
 const BusDetails = () => {
   const { docId } = useLocalSearchParams<{ docId: string }>();
-  console.log("Bus ID:", docId);
 
   const [bus, setBus] = useState<(BusProfile & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // children / add-child flow
+  // children / add-child
   const [children, setChildren] = useState<UserDoc[]>([]);
   const [selectedChildUid, setSelectedChildUid] = useState<string | null>(null);
   const [isAddChildModalVisible, setIsAddChildModalVisible] = useState(false);
 
-  // rate driver flow
-  const [isRateModelVisible, setIsRateModelVisible] = useState(false);
+  // rate driver
+  const [isRateDriverVisible, setIsRateDriverVisible] = useState(false);
   const [selectedDriverIdx, setSelectedDriverIdx] = useState<number | null>(
     null
   );
-  const [rating, setRating] = useState(0);
+  const [driverRating, setDriverRating] = useState(0);
 
-  // ---- subscribe to bus & children ----
+  // rate bus
+  const [isRateBusVisible, setIsRateBusVisible] = useState(false);
+  const [busRating, setBusRating] = useState(0);
+
+  /* --------- data --------- */
   useEffect(() => {
     if (!docId) return;
     const unsub = subscribeBusProfileById(String(docId), (b) => {
@@ -94,7 +134,7 @@ const BusDetails = () => {
     return () => unsub?.();
   }, []);
 
-  // ---- hard-coded driver list for now ----
+  /* --------- driver list (temporary) --------- */
   const driverList = useMemo(
     () => [
       { label: "Primary Driver", name: "Madusha Nayanajith", rating: 4.7 },
@@ -105,7 +145,7 @@ const BusDetails = () => {
     []
   );
 
-  // ---- actions ----
+  /* --------- actions --------- */
   const sendAddChildRequest = async () => {
     if (!docId || !selectedChildUid) {
       Alert.alert("Select a child first");
@@ -121,46 +161,50 @@ const BusDetails = () => {
     }
   };
 
-  const handleRatePress = () => {
-    setSelectedDriverIdx(null);
-    setRating(0);
-    setIsRateModelVisible(true);
-  };
-
-  const handleSubmitRating = () => {
-    if (selectedDriverIdx == null || rating === 0) {
+  const submitDriverRating = () => {
+    if (selectedDriverIdx == null || driverRating === 0) {
       Alert.alert("Pick a driver and a rating");
       return;
     }
     const driver = driverList[selectedDriverIdx];
-    console.log("Rating submitted:", { driver, rating });
-    setIsRateModelVisible(false);
+    console.log("Driver rating submitted:", { driver, rating: driverRating });
+    setIsRateDriverVisible(false);
   };
 
-  const renderStars = () => {
-    const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      const active = i <= rating;
-      stars.push(
-        <TouchableOpacity key={i} onPress={() => setRating(i)} className="mx-1">
-          <Text
-            className={`text-3xl ${active ? "text-yellow-400" : "text-gray-300"}`}
-          >
-            ★
-          </Text>
-        </TouchableOpacity>
-      );
+  const submitBusRating = () => {
+    if (busRating === 0) {
+      Alert.alert("Pick a rating for the bus");
+      return;
     }
-    return stars;
+    console.log("Bus rating submitted:", { busId: docId, rating: busRating });
+    setIsRateBusVisible(false);
   };
+
+  const callPhone = (phone?: string | null) => {
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() => {});
+  };
+
+  const renderStars = (value: number, setValue: (n: number) => void) =>
+    [1, 2, 3, 4, 5].map((i) => (
+      <TouchableOpacity key={i} onPress={() => setValue(i)} className="mx-2">
+        <Ionicons
+          name={i <= value ? "star" : "star-outline"}
+          size={28}
+          color={i <= value ? "#f59e0b" : "#d1d5db"}
+        />
+      </TouchableOpacity>
+    ));
+
+  /* ---------------------------- loading / empty ----------------------------- */
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-light-100">
+      <SafeAreaView className="flex-1 bg-[#E7F1FF]">
         <Header2 />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
-          <Text className="text-gray-500 mt-2">Loading bus…</Text>
+          <Text className="text-neutral-500 mt-2">Loading bus…</Text>
         </View>
       </SafeAreaView>
     );
@@ -168,20 +212,123 @@ const BusDetails = () => {
 
   if (!bus) {
     return (
-      <SafeAreaView className="flex-1 bg-light-100">
+      <SafeAreaView className="flex-1 bg-[#E7F1FF]">
         <Header2 />
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-lg text-gray-600">Bus not found.</Text>
+          <Text className="text-lg text-neutral-600">Bus not found.</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ----------- UI -----------
+  const ratingAvg = (bus.ratingAvg ?? 0).toFixed(1);
+  const ratingCount = bus.ratingCount ?? 0;
+
+  /* ---------------------------------- UI ------------------------------------ */
+
   return (
     <SafeAreaView className="flex-1 bg-[#E7F1FF]">
-      {/* Optional: keep your old header as top chrome */}
       <Header2 />
+
+      {/* Gradient header that also contains the action buttons */}
+      <LinearGradient
+        colors={["#D9E8FF", "#9fc3f5"]}
+        start={{ x: 0, y: 1 }}
+        end={{ x: 1, y: 0 }}
+        style={{ borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}
+        className="px-5 pt-4 pb-6"
+      >
+        <View className="flex-row items-start">
+          <View className="flex-1 pr-3">
+            <View className="flex-row items-center gap-2">
+              <Text
+                className="text-darkbg text-2xl font-semibold"
+                numberOfLines={1}
+              >
+                {bus.busNickName || "Unnamed Bus"}
+              </Text>
+            </View>
+
+            <View className="mt-1 flex-row items-center gap-2">
+              <Ionicons name="card-outline" size={16} color="#111827" />
+              <Text className="text-darkbg/90" numberOfLines={1}>
+                {bus.busNumber || bus.busId}
+              </Text>
+            </View>
+
+            <View className="mt-3">
+              <RoutePill start={bus.startAddress} end={bus.endAddress} />
+            </View>
+          </View>
+
+          {/* Compact rating */}
+          <View className="items-end">
+            <View className="bg-white/80 rounded-2xl px-3 py-2 items-end">
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="star" size={16} color="#f59e0b" />
+                <Text className="text-neutral-900 text-lg font-semibold">
+                  {ratingAvg}
+                </Text>
+                <Text className="text-neutral-700">/5</Text>
+              </View>
+              <Text className="text-neutral-600 text-[11px]">
+                {ratingCount} review{ratingCount === 1 ? "" : "s"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Action buttons INSIDE the gradient */}
+        <View className="flex-row flex-wrap gap-3 mt-4">
+          <TouchableOpacity
+            className="flex-1 rounded-2xl items-center justify-center py-4 shadow"
+            style={{ backgroundColor: "#F8B959" }}
+            onPress={() => Alert.alert("Notify Driver", "Coming soon")}
+            activeOpacity={0.9}
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons
+                name="notifications-outline"
+                size={18}
+                color="#1f2937"
+              />
+              <Text className="text-base text-gray-800">Notify Driver</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="flex-1 rounded-2xl items-center justify-center py-4 shadow"
+            style={{ backgroundColor: "#F85959" }}
+            onPress={() => Alert.alert("Complaint", "Coming soon")}
+            activeOpacity={0.9}
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons
+                name="chatbox-ellipses-outline"
+                size={18}
+                color="#1f2937"
+              />
+              <Text className="text-base text-gray-800">Complain</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* NEW: Rate Bus button */}
+          <TouchableOpacity
+            className="flex-1 rounded-2xl items-center justify-center py-4 shadow"
+            style={{ backgroundColor: "#7dd3fc" }}
+            onPress={() => {
+              setBusRating(0);
+              setIsRateBusVisible(true);
+            }}
+            activeOpacity={0.9}
+          >
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="star-outline" size={18} color="#111827" />
+              <Text className="text-base text-gray-800">Rate Bus</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <ScrollView
         className="flex-1"
@@ -190,138 +337,119 @@ const BusDetails = () => {
           paddingBottom: scrollViewBottomPadding,
         }}
       >
-        {/* Greeting header like the mock */}
-        {/* <View className="bg-[#D8E9FF] rounded-2xl p-4 mt-3 flex-row items-center"> */}
-        {/* <Image
-            source={images.childImage1}
-            className="w-10 h-10 rounded-full mr-3"
-          />
-          <View className="flex-1">
-            <Text className="text-xl font-semibold">Hello, Parent</Text>
-            <Text className="text-sm text-gray-500">{todayLabel()}</Text>
-          </View>
-          <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
-            <Text className="text-lg">🔔</Text>
-          </View>
-        </View> */}
-
-        {/* The Bus title */}
-        <Text className="text-2xl font-light mt-5 mb-2">The Bus</Text>
-
-        {/* Main card */}
-        <View className="bg-white rounded-2xl p-5 shadow">
-          {/* Name + edit + route indicator */}
-          <View className="flex-row items-start">
-            <View className="flex-1 pr-3">
-              <View className="flex-row items-center gap-2">
-                <Text className="text-xl font-semibold" numberOfLines={1}>
-                  {bus.busNickName || "Unnamed Bus"}
-                </Text>
-                <Text className="text-gray-400">✎</Text>
+        {/* FULL-WIDTH card under actions */}
+        <View className="mt-5">
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center">
+                <Ionicons name="person-outline" size={18} color="#2563eb" />
               </View>
-              <Text className="text-base text-gray-600 mt-1" numberOfLines={1}>
-                {bus.busNumber || bus.busId}
-              </Text>
-              {/* <Text className="text-base text-gray-600 mt-1" numberOfLines={1}>
-                {bus.email || ""}
-              </Text> */}
+              <View className="flex-1">
+                <Text
+                  className="text-neutral-900 font-medium"
+                  numberOfLines={1}
+                >
+                  {bus.firstName || bus.lastName
+                    ? `${bus.firstName ?? ""} ${bus.lastName ?? ""}`.trim()
+                    : "Contact"}
+                </Text>
+                <Text
+                  className="text-neutral-500 text-[12px]"
+                  numberOfLines={1}
+                >
+                  {bus.contactNumber || "-"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                className={`px-3 py-2 rounded-xl ${bus.contactNumber ? "bg-blue-600" : "bg-neutral-300"}`}
+                disabled={!bus.contactNumber}
+                onPress={() => callPhone(bus.contactNumber)}
+              >
+                <Text className="text-white text-[12px]">Call</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Vertical route */}
-            <RouteIndicator start={bus.startAddress} end={bus.endAddress} />
-          </View>
+            <Divider />
 
-          <Divider />
+            <View className="flex-row justify-center">
+              <Stat value={ratingAvg} label="Rating" />
+              <View className="w-[1px] bg-neutral-200 mx-3" />
+              <Stat value={String(ratingCount)} label="Reviews" />
+            </View>
+          </Card>
+        </View>
 
-          {/* Driver list (hard-coded for now) */}
-          <Text className="text-xl font-light">Driver List</Text>
-          <View className="mt-3">
+        {/* Driver list (kept) */}
+        <View className="mt-6">
+          <Text className="text-xl font-semibold text-neutral-900 mb-2">
+            Driver List
+          </Text>
+          <Card>
             {driverList.map((d, idx) => (
-              <View key={idx} className="flex-row py-2 items-center">
-                <View className="flex-1">
-                  <Text className="text-grayText font-light">{d.label}</Text>
+              <View key={idx}>
+                <View className="flex-row items-center py-3">
+                  <View className="w-10 h-10 rounded-full bg-neutral-100 items-center justify-center mr-3">
+                    <Text className="text-neutral-600 font-semibold">
+                      {d.name
+                        .split(" ")
+                        .map((n) => n.charAt(0))
+                        .slice(0, 2)
+                        .join("")}
+                    </Text>
+                  </View>
+
+                  <View className="flex-1">
+                    <Text className="text-neutral-900">{d.name}</Text>
+                    <Text className="text-neutral-500 text-[12px]">
+                      {d.label}
+                    </Text>
+                  </View>
+
+                  <View className="items-end">
+                    <View className="flex-row items-center gap-1">
+                      <Ionicons name="star" size={14} color="#f59e0b" />
+                      <Text className="text-neutral-900">
+                        {d.rating.toFixed(1)} / 5
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-grayText font-light">{d.name}</Text>
-                </View>
-                <View className="w-16 items-end">
-                  <Text className="text-grayText font-light">
-                    {d.rating.toFixed(1)} / 5
-                  </Text>
-                </View>
+                {idx < driverList.length - 1 ? (
+                  <View className="h-[1px] bg-neutral-100" />
+                ) : null}
               </View>
             ))}
-          </View>
 
-          <Divider />
-
-          {/* Contact Info */}
-          <Text className="text-xl font-light">Contact Info</Text>
-          <View className="mt-3">
-            <Text className="text-lg text-grayText font-light">
-              {bus.firstName || bus.lastName
-                ? `${bus.firstName ?? ""} ${bus.lastName ?? ""}`.trim()
-                : "Contact"}
-            </Text>
-            <Text className="text-lg text-grayText font-light">
-              {bus.contactNumber || "-"}
-            </Text>
-            {/* <Text className="text-lg text-blue-600 font-light">
-              {bus.email || "-"}
-            </Text> */}
-            <Text
-              className="text-lg text-grayText font-light"
-              numberOfLines={2}
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedDriverIdx(null);
+                setDriverRating(0);
+                setIsRateDriverVisible(true);
+              }}
+              className="mt-4 bg-fuchsia-500 rounded-2xl py-3 items-center"
+              activeOpacity={0.9}
             >
-              {`${bus.startAddress || ""}  —  ${bus.endAddress || ""}`}
-            </Text>
-          </View>
+              <Text className="text-white font-semibold">Rate Driver</Text>
+            </TouchableOpacity>
+          </Card>
         </View>
-        {/* Action buttons grid */}
-        <View className="flex-row flex-wrap justify-between mt-8">
-          <TouchableOpacity
-            className="w-[48%] rounded-2xl px-4 py-6 mb-4 items-center justify-center"
-            style={{ backgroundColor: "#F8B959" }}
-            onPress={() => Alert.alert("Notify Driver", "Coming soon")}
-          >
-            <Text className="text-lg text-gray-800">Notify Driver</Text>
-          </TouchableOpacity>
 
+        {/* Add Child CTA */}
+        <View className="mt-6 mb-2">
           <TouchableOpacity
-            className="w-[48%] rounded-2xl px-4 py-6 mb-4 items-center justify-center"
-            style={{ backgroundColor: "#F85959" }}
-            onPress={() => Alert.alert("Complaint", "Coming soon")}
-          >
-            <Text className="text-lg text-gray-800">Complain</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="w-[48%] rounded-2xl px-4 py-6 mb-4 items-center justify-center"
+            className="w-full rounded-2xl px-4 py-5 items-center justify-center shadow"
             style={{ backgroundColor: "#A9C9FB" }}
             onPress={() => setIsAddChildModalVisible(true)}
+            activeOpacity={0.95}
           >
-            <Text className="text-lg text-gray-800">Add Child</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="w-[48%] rounded-2xl px-4 py-6 mb-2 items-center justify-center"
-            style={{ backgroundColor: "#F292F1" }}
-            onPress={handleRatePress}
-          >
-            <Text className="text-lg text-gray-800">Rate Driver</Text>
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="add-circle-outline" size={20} color="#1f2937" />
+              <Text className="text-lg text-gray-800">
+                Add Child to this Bus
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
-
-        {/* (Optional) simple bottom nav mock (if you don’t already have tabs)
-        <View className="mt-5 bg-[#0E59FF] rounded-3xl px-4 py-3 flex-row justify-around items-center">
-          <Text className="text-white">Home</Text>
-          <View className="bg-white rounded-full px-4 py-2">
-            <Text className="text-[#0E59FF]">Bus</Text>
-          </View>
-          <Text className="text-white">Child</Text>
-          <Text className="text-white">Profile</Text>
-        </View>
-        */}
       </ScrollView>
 
       {/* Add Child Modal */}
@@ -332,70 +460,87 @@ const BusDetails = () => {
         onRequestClose={() => setIsAddChildModalVisible(false)}
       >
         <View className="flex-1 justify-center items-center bg-black/50 p-6">
-          <View className="bg-white rounded-lg p-4 w-full max-w-md">
-            <Text className="text-xl font-light mb-4">Select Child</Text>
+          <View className="bg-white rounded-2xl p-5 w-full max-w-md">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-xl font-semibold">Select Child</Text>
+              <TouchableOpacity
+                onPress={() => setIsAddChildModalVisible(false)}
+              >
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
 
-            {children.length === 0 && (
-              <Text className="text-gray-500 mb-4">
+            {children.length === 0 ? (
+              <Text className="text-neutral-500 mb-4">
                 No children linked to your account.
               </Text>
-            )}
+            ) : null}
 
-            {children.map((child) => (
-              <TouchableOpacity
-                key={child.uid}
-                className={`flex-row items-center mb-3 p-3 rounded-lg ${
-                  selectedChildUid === child.uid ? "bg-blue-50" : "bg-gray-50"
-                }`}
-                onPress={() => setSelectedChildUid(child.uid)}
-              >
-                <View className="w-10 h-10 rounded-full overflow-hidden mr-3 bg-gray-200">
-                  <Image
-                    source={images.childImage1}
-                    className="w-full h-full"
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-base text-gray-800 font-medium">
-                    {child.fullName ||
-                      [child.firstName, child.lastName]
-                        .filter(Boolean)
-                        .join(" ") ||
-                      "Unnamed"}
-                  </Text>
-                  <Text className="text-xs text-gray-500">
-                    {child.currentBusId ? "Already linked" : "Not linked"}
-                  </Text>
-                </View>
-                {selectedChildUid === child.uid && (
-                  <View className="w-6 h-6 bg-blue-500 rounded-full justify-center items-center">
-                    <Text className="text-white text-xs">✓</Text>
+            {children.map((child) => {
+              const selected = selectedChildUid === child.uid;
+              const name =
+                child.fullName ||
+                [child.firstName, child.lastName].filter(Boolean).join(" ") ||
+                "Unnamed";
+
+              return (
+                <TouchableOpacity
+                  key={child.uid}
+                  className={`flex-row items-center mb-3 p-3 rounded-2xl border ${
+                    selected
+                      ? "bg-blue-50 border-blue-300"
+                      : "bg-neutral-50 border-neutral-200"
+                  }`}
+                  onPress={() => setSelectedChildUid(child.uid)}
+                  activeOpacity={0.9}
+                >
+                  <View className="w-10 h-10 rounded-full overflow-hidden mr-3 bg-neutral-200">
+                    <Image
+                      source={images.childImage1}
+                      className="w-full h-full"
+                    />
                   </View>
-                )}
-              </TouchableOpacity>
-            ))}
+                  <View className="flex-1">
+                    <Text
+                      className="text-base text-neutral-900 font-medium"
+                      numberOfLines={1}
+                    >
+                      {name}
+                    </Text>
+                    <Text className="text-xs text-neutral-500">
+                      {child.currentBusId ? "Already linked" : "Not linked"}
+                    </Text>
+                  </View>
+                  {selected ? (
+                    <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center">
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
 
             <View className="w-full flex-row mt-4 justify-between gap-3">
               <TouchableOpacity
-                className={`flex-1 px-4 py-3 rounded-lg ${
-                  selectedChildUid ? "bg-blue-500" : "bg-gray-300"
+                className={`flex-1 px-4 py-3 rounded-2xl ${
+                  selectedChildUid ? "bg-blue-600" : "bg-neutral-300"
                 }`}
                 onPress={sendAddChildRequest}
                 disabled={!selectedChildUid}
               >
                 <Text
-                  className={`text-center text-lg font-light ${
-                    selectedChildUid ? "text-white" : "text-gray-500"
+                  className={`text-center text-base font-semibold ${
+                    selectedChildUid ? "text-white" : "text-neutral-600"
                   }`}
                 >
                   Send Request
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="px-6 bg-red-500 py-3 rounded-lg"
+                className="px-6 bg-red-500 py-3 rounded-2xl"
                 onPress={() => setIsAddChildModalVisible(false)}
               >
-                <Text className="text-white text-center text-lg font-light">
+                <Text className="text-white text-center text-base font-semibold">
                   Close
                 </Text>
               </TouchableOpacity>
@@ -408,82 +553,162 @@ const BusDetails = () => {
       <Modal
         animationType="slide"
         transparent
-        visible={isRateModelVisible}
-        onRequestClose={() => setIsRateModelVisible(false)}
+        visible={isRateDriverVisible}
+        onRequestClose={() => setIsRateDriverVisible(false)}
       >
         <View className="flex-1 justify-center items-center bg-black/50 p-6">
-          <View className="bg-white rounded-lg p-6 w-full max-w-md">
-            <Text className="text-xl font-light mb-6">Rate Driver</Text>
-
-            <Text className="text-lg font-medium mb-3">Select Driver:</Text>
-            {driverList.map((d, i) => (
-              <TouchableOpacity
-                key={i}
-                className={`flex-row items-center mb-3 p-4 rounded-lg border-2 ${
-                  selectedDriverIdx === i
-                    ? "bg-blue-50 border-blue-500"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-                onPress={() => {
-                  setSelectedDriverIdx(i);
-                  setRating(0);
-                }}
-              >
-                <View className="flex-1">
-                  <Text className="text-lg text-gray-800 font-medium">
-                    {d.name}
-                  </Text>
-                  <Text className="text-sm text-gray-500">
-                    Current Rating: {d.rating.toFixed(1)} / 5
-                  </Text>
-                </View>
-                {selectedDriverIdx === i && (
-                  <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center">
-                    <Text className="text-white text-xs font-bold">✓</Text>
-                  </View>
-                )}
+          <View className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-xl font-semibold">Rate Driver</Text>
+              <TouchableOpacity onPress={() => setIsRateDriverVisible(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
               </TouchableOpacity>
-            ))}
+            </View>
+
+            <Text className="text-[13px] text-neutral-500 mb-3">
+              Select a driver and give your rating.
+            </Text>
+
+            {driverList.map((d, i) => {
+              const selected = selectedDriverIdx === i;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  className={`flex-row items-center mb-3 p-4 rounded-2xl border-2 ${
+                    selected
+                      ? "bg-blue-50 border-blue-500"
+                      : "bg-neutral-50 border-neutral-200"
+                  }`}
+                  onPress={() => {
+                    setSelectedDriverIdx(i);
+                    setDriverRating(0);
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <View className="w-10 h-10 rounded-full bg-neutral-100 items-center justify-center mr-3">
+                    <Text className="text-neutral-600 font-semibold">
+                      {d.name
+                        .split(" ")
+                        .map((n) => n.charAt(0))
+                        .slice(0, 2)
+                        .join("")}
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-neutral-900 font-medium">
+                      {d.name}
+                    </Text>
+                    <Text className="text-neutral-500 text-[12px]">
+                      Current: {d.rating.toFixed(1)} / 5
+                    </Text>
+                  </View>
+                  {selected ? (
+                    <View className="w-6 h-6 bg-blue-600 rounded-full items-center justify-center">
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
 
             {selectedDriverIdx != null && (
-              <View className="mb-6">
-                <Text className="text-lg font-medium mb-3">Your Rating:</Text>
-                <View className="flex-row justify-center items-center py-4">
-                  {renderStars()}
+              <View className="mb-4 mt-1 items-center">
+                <View className="flex-row items-center justify-center">
+                  {renderStars(driverRating, setDriverRating)}
                 </View>
-                {rating > 0 && (
-                  <Text className="text-center text-gray-600 mt-2">
-                    {rating} out of 5 stars
+                {driverRating > 0 ? (
+                  <Text className="text-neutral-600 mt-2">
+                    {driverRating} out of 5
                   </Text>
-                )}
+                ) : null}
               </View>
             )}
 
             <View className="w-full flex-row justify-between gap-3">
               <TouchableOpacity
-                className={`flex-1 px-4 py-4 rounded-lg ${
-                  selectedDriverIdx != null && rating > 0
-                    ? "bg-blue-500"
-                    : "bg-gray-300"
+                className={`flex-1 px-4 py-4 rounded-2xl ${
+                  selectedDriverIdx != null && driverRating > 0
+                    ? "bg-blue-600"
+                    : "bg-neutral-300"
                 }`}
-                onPress={handleSubmitRating}
-                disabled={selectedDriverIdx == null || rating === 0}
+                onPress={submitDriverRating}
+                disabled={selectedDriverIdx == null || driverRating === 0}
               >
                 <Text
-                  className={`text-center text-lg font-light ${
-                    selectedDriverIdx != null && rating > 0
+                  className={`text-center text-base font-semibold ${
+                    selectedDriverIdx != null && driverRating > 0
                       ? "text-white"
-                      : "text-gray-500"
+                      : "text-neutral-600"
                   }`}
                 >
                   Submit Rating
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="px-6 bg-red-500 py-4 rounded-lg"
-                onPress={() => setIsRateModelVisible(false)}
+                className="px-6 bg-red-500 py-4 rounded-2xl"
+                onPress={() => setIsRateDriverVisible(false)}
               >
-                <Text className="text-white text-center text-lg font-light">
+                <Text className="text-white text-center text-base font-semibold">
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rate Bus Modal */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={isRateBusVisible}
+        onRequestClose={() => setIsRateBusVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 p-6">
+          <View className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-xl font-semibold">Rate Bus</Text>
+              <TouchableOpacity onPress={() => setIsRateBusVisible(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text className="text-[13px] text-neutral-500 mb-3">
+              Give an overall rating for this bus.
+            </Text>
+
+            <View className="mb-4 mt-1 items-center">
+              <View className="flex-row items-center justify-center">
+                {renderStars(busRating, setBusRating)}
+              </View>
+              {busRating > 0 ? (
+                <Text className="text-neutral-600 mt-2">
+                  {busRating} out of 5
+                </Text>
+              ) : null}
+            </View>
+
+            <View className="w-full flex-row justify-between gap-3">
+              <TouchableOpacity
+                className={`flex-1 px-4 py-4 rounded-2xl ${
+                  busRating > 0 ? "bg-blue-600" : "bg-neutral-300"
+                }`}
+                onPress={submitBusRating}
+                disabled={busRating === 0}
+              >
+                <Text
+                  className={`text-center text-base font-semibold ${
+                    busRating > 0 ? "text-white" : "text-neutral-600"
+                  }`}
+                >
+                  Submit Rating
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="px-6 bg-red-500 py-4 rounded-2xl"
+                onPress={() => setIsRateBusVisible(false)}
+              >
+                <Text className="text-white text-center text-base font-semibold">
                   Close
                 </Text>
               </TouchableOpacity>
