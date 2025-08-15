@@ -1,3 +1,4 @@
+// app/BusHome.tsx
 import Header from "@/app/Components/header";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import React, { useMemo, useState } from "react";
@@ -5,7 +6,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -18,6 +21,9 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
+// Map
+import MapView, { Marker, type Region } from "react-native-maps";
 
 /* =================== Types =================== */
 type RouteSession = "morning" | "evening";
@@ -88,6 +94,20 @@ const INITIAL_STUDENTS: Student[] = [
     statuses: { morning: "PICK_IN", evening: "PICK_IN" },
   },
 ];
+
+/* ============== Hardcoded child locations (demo) ============== */
+// You can wire these up to Firestore later (homeLocation/schoolLocation per child)
+const STUDENT_LOCATIONS: Record<
+  string,
+  { latitude: number; longitude: number; label?: string }
+> = {
+  "1": { latitude: 6.8723, longitude: 79.8894, label: "Shenuki Home" }, // Maharagama-ish
+  "2": { latitude: 6.9271, longitude: 79.8612, label: "Reniki Home" }, // Colombo
+  "3": { latitude: 6.8497, longitude: 79.9265, label: "Phenuki Home" },
+  "4": { latitude: 6.9003, longitude: 79.9605, label: "Shenuki (2) Home" },
+  "5": { latitude: 6.9147, longitude: 79.9733, label: "Menuki Home" },
+  "6": { latitude: 6.9358, longitude: 79.8433, label: "Shenuki (3) Home" },
+};
 
 /* ================== Helpers =================== */
 function todayLabel() {
@@ -347,8 +367,167 @@ const NotifyModal: React.FC<NotifyModalProps> = ({
   );
 };
 
-/* ============ Status Sheet (ADDED) ============ */
+/* ============ Full Screen Map Modal (NEW) ============ */
 
+interface MapModalProps {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  coord?: { latitude: number; longitude: number };
+  address?: string;
+}
+
+const MapModal: React.FC<MapModalProps> = ({
+  visible,
+  onClose,
+  title,
+  coord,
+  address,
+}) => {
+  const region: Region | undefined = coord
+    ? {
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      }
+    : undefined;
+
+  const openExternal = () => {
+    if (!coord) return;
+    const { latitude, longitude } = coord;
+    const label = encodeURIComponent(title || "Location");
+    const url =
+      Platform.OS === "ios"
+        ? `maps:0,0?q=${label}@${latitude},${longitude}`
+        : `geo:${latitude},${longitude}?q=${latitude},${longitude}(${label})`;
+    Linking.openURL(url).catch(() => {});
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView className="flex-1 bg-light-100">
+        {/* Header */}
+        <View className="px-4 py-3 flex-row items-center justify-between border-b border-neutral-200">
+          <Text className="text-lg font-semibold" numberOfLines={1}>
+            {title || "Child Location"}
+          </Text>
+          <View className="flex-row gap-2">
+            <TouchableOpacity
+              onPress={openExternal}
+              disabled={!coord}
+              className={`px-3 py-2 rounded-xl ${
+                coord ? "bg-blue-600" : "bg-neutral-300"
+              }`}
+            >
+              <Text className="text-white">Open in Maps</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onClose}
+              className="px-3 py-2 rounded-xl bg-neutral-200"
+            >
+              <Text>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Map */}
+        <View className="flex-1">
+          {coord ? (
+            <MapView style={{ flex: 1 }} initialRegion={region!}>
+              <Marker coordinate={coord} title={title} description={address} />
+            </MapView>
+          ) : (
+            <View className="flex-1 items-center justify-center">
+              <Text className="text-neutral-500">No location available</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Address footer */}
+        <View className="px-4 py-3 border-t border-neutral-200 bg-white">
+          <Text className="text-neutral-700" numberOfLines={2}>
+            {address || "—"}
+          </Text>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+/* ================ Student Card ================ */
+interface StudentCardProps {
+  student: Student;
+  session: RouteSession;
+  onPressStatus: (studentId: string) => void;
+  onPressMap: (studentId: string) => void; // NEW
+}
+
+const StudentCard: React.FC<StudentCardProps> = ({
+  student,
+  session,
+  onPressStatus,
+  onPressMap, // NEW
+}) => {
+  const statusKey = student.statuses[session];
+  const m = STATUS_META[statusKey];
+
+  return (
+    <View
+      className={`w-full rounded-2xl px-3 py-3 mb-3 bg-white/70 border border-white ${
+        student.active ? "opacity-100" : "opacity-50"
+      }`}
+    >
+      <View className="flex-row items-center">
+        {/* Avatar */}
+        <View className="mr-3">
+          {student.avatar ? (
+            <Image
+              source={{ uri: student.avatar }}
+              className="w-10 h-10 rounded-full"
+            />
+          ) : (
+            <View className="w-10 h-10 rounded-full bg-blue-200 items-center justify-center">
+              <Text className="text-blue-700 text-lg">
+                {student.name?.charAt(0) ?? "S"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Info */}
+        <View className="flex-1">
+          <Text className="text-xl text-neutral-900">{student.name}</Text>
+          <Text className="text-lg text-neutral-500" numberOfLines={1}>
+            {student.address}
+          </Text>
+
+          {/* View on map chip */}
+          <View className="mt-2">
+            <TouchableOpacity
+              onPress={() => onPressMap(student.id)}
+              className="self-start px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200"
+            >
+              <Text className="text-blue-700 text-xs">View on Map</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Status pill */}
+        <TouchableOpacity
+          onPress={() => onPressStatus(student.id)}
+          disabled={!student.active}
+          className={`flex-row items-center gap-2 px-3 py-2 rounded-full ${m.pill} ${m.text}`}
+        >
+          <Text className="text-sm">{m.label}</Text>
+          <Text className="text-sm">▾</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+/* ============ Status Sheet ============ */
 interface StatusSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -407,66 +586,6 @@ const StatusSheet: React.FC<StatusSheetProps> = ({
   );
 };
 
-/* ================ Student Card ================ */
-interface StudentCardProps {
-  student: Student;
-  session: RouteSession;
-  onPressStatus: (studentId: string) => void;
-}
-
-const StudentCard: React.FC<StudentCardProps> = ({
-  student,
-  session,
-  onPressStatus,
-}) => {
-  const statusKey = student.statuses[session];
-  const m = STATUS_META[statusKey];
-
-  return (
-    <View
-      className={`w-full rounded-2xl px-3 py-3 mb-3 bg-white/70 border border-white ${
-        student.active ? "opacity-100" : "opacity-50"
-      }`}
-    >
-      <View className="flex-row items-center">
-        {/* Avatar */}
-        <View className="mr-3">
-          {student.avatar ? (
-            <Image
-              source={{ uri: student.avatar }}
-              className="w-10 h-10 rounded-full"
-            />
-          ) : (
-            <View className="w-10 h-10 rounded-full bg-blue-200 items-center justify-center">
-              <Text className="text-blue-700 text-lg">
-                {student.name?.charAt(0) ?? "S"}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Info */}
-        <View className="flex-1">
-          <Text className="text-xl text-neutral-900">{student.name}</Text>
-          <Text className="text-lg text-neutral-500" numberOfLines={1}>
-            {student.address}
-          </Text>
-        </View>
-
-        {/* Status pill */}
-        <TouchableOpacity
-          onPress={() => onPressStatus(student.id)}
-          disabled={!student.active}
-          className={`flex-row items-center gap-2 px-3 py-2 rounded-full ${m.pill} ${m.text}`}
-        >
-          <Text className="text-sm">{m.label}</Text>
-          <Text className="text-sm">▾</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 /* ================== Main Screen ================== */
 const scrollViewBottomPadding = 24;
 const ACTION_BAR_HEIGHT = 72;
@@ -480,6 +599,9 @@ const BusHome: React.FC = () => {
   // popups
   const [showEmergency, setShowEmergency] = useState(false);
   const [showNotify, setShowNotify] = useState(false);
+
+  // map modal
+  const [mapStudentId, setMapStudentId] = useState<string | null>(null);
 
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
@@ -533,6 +655,20 @@ const BusHome: React.FC = () => {
   const FLOATING_GAP = 46;
   const bottomOffset = tabBarHeight + insets.bottom + FLOATING_GAP;
 
+  const mapCoord =
+    mapStudentId && STUDENT_LOCATIONS[mapStudentId]
+      ? {
+          latitude: STUDENT_LOCATIONS[mapStudentId].latitude,
+          longitude: STUDENT_LOCATIONS[mapStudentId].longitude,
+        }
+      : undefined;
+  const mapTitle =
+    (mapStudentId && students.find((s) => s.id === mapStudentId)?.name) ||
+    "Child";
+  const mapAddress =
+    (mapStudentId && students.find((s) => s.id === mapStudentId)?.address) ||
+    "";
+
   return (
     <SafeAreaView
       className="flex-1 bg-light-100"
@@ -551,10 +687,11 @@ const BusHome: React.FC = () => {
           {/* Top header */}
           <Header isCode={false} />
 
-          {/* Date (optional) */}
-          {/* <View className="mt-2">
+          {/* (optional) date
+          <View className="mt-2">
             <Text className="text-[12px] text-neutral-500">{dateText}</Text>
-          </View> */}
+          </View>
+          */}
 
           {/* Session toggle */}
           <View className="mt-3 mb-4 flex-row items-center justify-center w-full gap-2">
@@ -588,6 +725,7 @@ const BusHome: React.FC = () => {
                 student={s}
                 session={session}
                 onPressStatus={(id) => setSheetStudentId(id)}
+                onPressMap={(id) => setMapStudentId(id)} // NEW
               />
             ))}
           </View>
@@ -657,6 +795,15 @@ const BusHome: React.FC = () => {
         students={students}
         onClose={() => setShowNotify(false)}
         onSend={sendParentNotifications}
+      />
+
+      {/* Full-screen child map (NEW) */}
+      <MapModal
+        visible={!!mapStudentId}
+        onClose={() => setMapStudentId(null)}
+        title={mapTitle}
+        coord={mapCoord}
+        address={mapAddress}
       />
     </SafeAreaView>
   );
