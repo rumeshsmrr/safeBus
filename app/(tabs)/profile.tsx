@@ -1,5 +1,4 @@
 // app/ParentProfile.tsx
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -17,12 +16,12 @@ import {
 } from "react-native";
 
 import { auth } from "@/app/lib/firebase";
-import { signOut } from "firebase/auth";
 
 import { images } from "@/constants/images"; // fallback avatar used below
 import { subscribeMyChildren, subscribeUserById } from "@/data/users";
 import type { UserDoc } from "@/types/user";
 import { displayNameOf } from "@/types/user";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const Banner = ({ name, email }: { name: string; email?: string | null }) => (
   <LinearGradient
@@ -132,11 +131,12 @@ const ParentProfile = () => {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem("userData");
-      await signOut(auth);
-      router.replace("/LogingScreen"); // keep your route name
-    } catch (e: any) {
-      Alert.alert("Logout failed", e?.message ?? "Try again.");
+      await auth.signOut();
+      await AsyncStorage.removeItem("user");
+      router.replace("/LogingScreen");
+    } catch (e) {
+      console.error("Logout failed:", e);
+      Alert.alert("Error", "Failed to log out. Please try again.");
     }
   };
 
