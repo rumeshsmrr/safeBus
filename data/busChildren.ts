@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   runTransaction,
@@ -82,12 +83,12 @@ export async function getBusChild(busId: string, childUid: string) {
 export async function getMyRequestsForBus(busId: string): Promise<BusChild[]> {
   const parentUid = auth.currentUser?.uid;
   if (!parentUid) return [];
-  const q = query(
+  const qReq = query(
     collection(db, COL),
     where("busId", "==", busId),
     where("parentUid", "==", parentUid)
   );
-  const snaps = await getDocs(q);
+  const snaps = await getDocs(qReq);
   return snaps.docs.map((d) => ({ id: d.id, ...d.data() }) as BusChild);
 }
 
@@ -98,12 +99,12 @@ export function subscribePendingBusChildRequests(
   busId: string,
   cb: (list: BusChild[]) => void
 ): Unsubscribe {
-  const q = query(
+  const qPending = query(
     collection(db, COL),
     where("busId", "==", busId),
     where("status", "==", "pending")
   );
-  return onSnapshot(q, (qs) => {
+  return onSnapshot(qPending, (qs) => {
     const list = qs.docs.map((d) => ({ id: d.id, ...d.data() }) as BusChild);
     cb(list);
   });
@@ -116,12 +117,12 @@ export function subscribeMyRequestsForBus(
 ): Unsubscribe | null {
   const parentUid = auth.currentUser?.uid;
   if (!parentUid) return null;
-  const q = query(
+  const qMine = query(
     collection(db, COL),
     where("busId", "==", busId),
     where("parentUid", "==", parentUid)
   );
-  return onSnapshot(q, (qs) => {
+  return onSnapshot(qMine, (qs) => {
     const list = qs.docs.map((d) => ({ id: d.id, ...d.data() }) as BusChild);
     cb(list);
   });
@@ -129,7 +130,6 @@ export function subscribeMyRequestsForBus(
 
 /* -------------------- Moderator actions -------------------- */
 
-/** Approve: marks request approved and links child to the bus (users/{childUid}.currentBusId = busId) */
 export async function approveBusChildRequest(params: {
   busId: string;
   childUid: string;
@@ -166,7 +166,6 @@ export async function approveBusChildRequest(params: {
   });
 }
 
-/** Reject: marks request rejected (optional reason) */
 export async function rejectBusChildRequest(params: {
   busId: string;
   childUid: string;
@@ -191,7 +190,6 @@ export async function rejectBusChildRequest(params: {
   });
 }
 
-/** Remove (unlink) an approved child from a bus */
 export async function removeChildFromBus(params: {
   busId: string;
   childUid: string;
@@ -226,4 +224,23 @@ export async function removeChildFromBus(params: {
       });
     }
   });
+}
+
+/* =========================
+   ADD: Approved bus lookup
+   ========================= */
+export async function getApprovedBusForChild(
+  childUid: string
+): Promise<string | null> {
+  if (!childUid) return null;
+  const qApproved = query(
+    collection(db, COL),
+    where("childUid", "==", childUid),
+    where("status", "==", "approved"),
+    limit(1)
+  );
+  const snaps = await getDocs(qApproved);
+  if (snaps.empty) return null;
+  const data = snaps.docs[0].data() as BusChild;
+  return data.busId ?? null;
 }

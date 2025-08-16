@@ -6,6 +6,7 @@ import {
   DocumentData,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   QuerySnapshot,
@@ -51,7 +52,7 @@ const normalizeDoc = (d: { id: string; data: () => DocumentData }) => {
 
 const toStr = (v: unknown) => (typeof v === "string" ? v : v ? String(v) : "");
 
-// --- One-time getters (unchanged except normalizeDoc used) ---
+// --- One-time getters ---
 export const getAllBusProfiles = async () => {
   try {
     const snapshot = await getDocs(busProfilesCol);
@@ -64,8 +65,8 @@ export const getAllBusProfiles = async () => {
 
 export const getBusProfilesByOwner = async (ownerUid: string) => {
   try {
-    const q = query(busProfilesCol, where("ownerUid", "==", ownerUid));
-    const snapshot = await getDocs(q);
+    const qOwner = query(busProfilesCol, where("ownerUid", "==", ownerUid));
+    const snapshot = await getDocs(qOwner);
     return snapshot.docs.map((doc) => normalizeDoc(doc));
   } catch (error) {
     console.error("Error fetching bus profiles by owner:", error);
@@ -89,7 +90,7 @@ export const getBusProfileById = async (busId: string) => {
   }
 };
 
-// --- Real-time subscriptions (unchanged shape, now include aggregates) ---
+// --- Real-time subscriptions ---
 export const subscribeAllBusProfiles = (
   onChange: (buses: (BusProfile & { id: string })[]) => void,
   onError?: (e: unknown) => void
@@ -139,7 +140,7 @@ export const subscribeBusProfileById = (
   );
 };
 
-// --- Search helper (unchanged) ---
+// --- Search helper ---
 export const filterBuses = (
   buses: (BusProfile & { id: string })[],
   queryText: string
@@ -165,3 +166,21 @@ export const filterBuses = (
     );
   });
 };
+
+/* =========================
+   ADD: Resolve any ID to docId
+   ========================= */
+export async function resolveBusDocId(anyId: string): Promise<string | null> {
+  if (!anyId) return null;
+
+  // (a) direct doc id
+  const byDocId = await getDoc(doc(busProfilesCol, anyId));
+  if (byDocId.exists()) return byDocId.id;
+
+  // (b) lookup by the "busId" field
+  const qBusId = query(busProfilesCol, where("busId", "==", anyId), limit(1));
+  const snaps = await getDocs(qBusId);
+  if (!snaps.empty) return snaps.docs[0].id;
+
+  return null;
+}
