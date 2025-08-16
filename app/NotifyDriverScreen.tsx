@@ -1,8 +1,11 @@
+// app/NotifyDriverScreen.tsx
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Platform,
   SafeAreaView,
@@ -13,132 +16,145 @@ import {
 } from "react-native";
 import Header2 from "./Components/header2";
 
+import {
+  dateKeyFor,
+  ensureTourDay,
+  setBothSessionsNotGoing,
+} from "@/data/tours";
+import { subscribeMyChildren } from "@/data/users";
+import type { UserDoc } from "@/types/user";
+
 const scrollViewBottomPadding = 24;
 
-interface Child {
-  id: string;
-  name: string;
-  isLinked: boolean;
-  image: any;
-  homeLocation: {
-    latitude: number;
-    longitude: number;
-    address: string;
-  };
-  schoolLocation: {
-    latitude: number;
-    longitude: number;
-    address: string;
-  };
-}
-
-interface DefaultMessage {
-  id: string;
-  message: string;
-}
-
-interface sentMessags {
+type SentMessage = {
   id: string;
   message: string;
   date: Date;
-  childId: string;
+  childUid: string;
   childName: string;
   childImage: any;
-}
+};
 
-const tempImage = images.childImage1;
-const selectedChild: Child[] = [
-  {
-    id: "1",
-    name: "Shenuki Dilsara",
-    isLinked: true,
-    image: tempImage,
-    homeLocation: {
-      latitude: 6.8856,
-      longitude: 79.8596,
-      address: "Wattegedara, Maharagama, Sri Lanka",
-    },
-    schoolLocation: {
-      latitude: 6.9271,
-      longitude: 79.8612,
-      address: "Maradana, Sri Lanka",
-    },
-  },
-];
-
-const defaultMessages: DefaultMessage[] = [
-  {
-    id: "1",
-    message: "Does not go to school",
-  },
-  {
-    id: "2",
-    message: "Not available for evening pickup",
-  },
-];
+const DEFAULT_MESSAGES = [{ id: "notgoing", message: "Not available" }];
 
 const NotifyDriverScreen = () => {
-  // Allow date to be null initially
-  const [date, setDate] = useState<Date | null>(null); // Change initial state to null
+  // children from DB
+  const [children, setChildren] = useState<UserDoc[] | null>(null);
+  const [loadingKids, setLoadingKids] = useState(true);
+
+  // selection state
+  const [selectedChildUid, setSelectedChildUid] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<string | null>(
+    DEFAULT_MESSAGES[0].message
+  );
+
+  // date picker state
+  const [date, setDate] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
-  const [sentMessages, setSentMessages] = useState<sentMessags[]>([]);
 
-  const [selectedChildId, setSelectedChildId] = useState("1"); // Default to the first child
+  // UX state
+  const [sending, setSending] = useState(false);
+  const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
 
-  const onChange = (event: any, selectedDate?: Date) => {
-    // When the picker is dismissed (e.g., on Android when cancelling), selectedDate might be undefined.
-    // We only update the date if a valid date was selected.
-    setShowPicker(Platform.OS === "ios"); // For iOS, always close the picker after an action.
+  // dates bounds
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const oneYearFromNow = useMemo(() => {
+    const d = new Date(today);
+    d.setFullYear(today.getFullYear() + 1);
+    return d;
+  }, [today]);
 
-    if (selectedDate) {
-      setDate(selectedDate);
+  // subscribe to current parent's children
+  useEffect(() => {
+    const unsub = subscribeMyChildren((kids) => {
+      setChildren(kids);
+      setLoadingKids(false);
+      if (kids.length && !selectedChildUid) setSelectedChildUid(kids[0].uid);
+    });
+    if (!unsub) setLoadingKids(false);
+    return () => unsub?.();
+  }, []);
+
+  const selectedChild = useMemo(
+    () => children?.find((c) => c.uid === selectedChildUid) ?? null,
+    [children, selectedChildUid]
+  );
+
+  const selectedChildName = useMemo(() => {
+    if (!selectedChild) return "";
+    return (
+      selectedChild.fullName ||
+      [selectedChild.firstName, selectedChild.lastName]
+        .filter(Boolean)
+        .join(" ") ||
+      "Unnamed"
+    );
+  }, [selectedChild]);
+
+  const canSend =
+    !!date &&
+    !!selectedMessage &&
+    !!selectedChild?.currentBusId &&
+    !!selectedChild?.uid;
+
+  const onChangeDate = (_: any, picked?: Date) => {
+    setShowPicker(Platform.OS === "ios"); // keep iOS picker open, Android closes itself
+    if (picked) {
+      picked.setHours(0, 0, 0, 0);
+      setDate(picked);
     }
-    // If selectedDate is undefined (user canceled on Android), we don't update the date state,
-    // and the picker implicitly closes itself on Android.
   };
 
-  const showDatepicker = () => {
-    setShowPicker(true);
-  };
-
-  // Define today's date and a date one year from now for min/max
-  const today = new Date();
-  const oneYearFromNow = new Date();
-  oneYearFromNow.setFullYear(today.getFullYear() + 1);
-
-  //handle sending the message
-  const handleSendMessage = () => {
-    if (!date || !selectedMessage || !selectedChildId) {
-      // Ensure all required fields are filled
-      alert("Please select a date, message, and child.");
+  const handleSend = async () => {
+    if (!canSend || !selectedChild || !date) {
+      Alert.alert("Select all fields", "Pick child, date and message.");
       return;
     }
+    const busId = selectedChild.currentBusId!;
+    const childUid = selectedChild.uid;
+    const dateKey = dateKeyFor(date);
 
-    const child = selectedChild.find((c) => c.id === selectedChildId);
-    if (!child) {
-      alert("Selected child not found.");
-      return;
+    try {
+      setSending(true);
+      // Make sure the tour day exists & the participant snapshot is refreshed
+      await ensureTourDay(busId, dateKey);
+      // Mark NOT_GOING for both sessions for that date
+      await setBothSessionsNotGoing(busId, childUid, dateKey);
+
+      // (optional) local “sent” list for parent UI
+      setSentMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).slice(2),
+          message: selectedMessage!,
+          date,
+          childUid,
+          childName: selectedChildName,
+          childImage: images.childImage1,
+        },
+      ]);
+      setDate(null);
+      // keep selectedMessage as-is; parent often repeats the same note
+
+      Alert.alert(
+        "Sent",
+        `Marked "${selectedChildName}" as NOT GOING for morning & evening on ${date.toLocaleDateString()}. The driver’s tour will update.`
+      );
+    } catch (e: any) {
+      Alert.alert("Couldn’t send", e?.message ?? "Please try again.");
+    } finally {
+      setSending(false);
     }
-
-    const newMessage: sentMessags = {
-      id: Math.random().toString(36).substring(7), // Generate a random ID
-      message: selectedMessage,
-      date: date,
-      childId: child.id,
-      childName: child.name,
-      childImage: child.image,
-    };
-
-    setSentMessages([...sentMessages, newMessage]);
-    setDate(null); // Reset date after sending
-    setSelectedMessage(null); // Reset selected message after sending
   };
 
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       <Header2 />
-      {/* Main scrollable content area */}
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -147,81 +163,136 @@ const NotifyDriverScreen = () => {
         }}
       >
         <Text className="text-2xl font-light mt-4">Notify Driver</Text>
-        <Text className="text-xl font-light mt-4 ">Connected Child</Text>
-        <View className="flex-col gap-2 pt-4">
-          {selectedChild.map((child: Child, index: number) => (
-            <TouchableOpacity
-              key={child.id} // Use child.id as key if available, otherwise index
-              className={`flex-col gap-4 bg-white p-4 rounded-lg shadow ${
-                selectedChildId === child.id ? "border border-black" : ""
-              }`}
-              onPress={() => setSelectedChildId(child.id)} // Update selected child on press
-            >
-              {/* Wrap the two Views in a single View */}
-              <View>
-                <View className="flex-row items-center gap-4">
-                  <Image
-                    source={child.image}
-                    style={{ height: 48, width: 48, borderRadius: 24 }}
-                  />
-                  <View className="flex-1">
-                    <Text className="text-lg font-semibold">{child.name}</Text>
-                    <Text className="text-sm text-blue-700 font-light">
-                      {child.isLinked ? "Linked to Bus" : "Not Linked to Bus"}
-                    </Text>
-                  </View>
-                </View>
-                <View className="flex-col gap-2 border-t border-gray-200 pt-2">
-                  <Text className="text-md text-grayText">Home:</Text>
-                  <View className="flex-row items-center justify-between gap-2">
-                    <View className="flex-row gap-2">
+
+        {/* Children list */}
+        <Text className="text-xl font-light mt-4">Connected Child</Text>
+        {loadingKids ? (
+          <View className="mt-4 items-center">
+            <ActivityIndicator />
+            <Text className="text-neutral-500 mt-2">Loading…</Text>
+          </View>
+        ) : !children || children.length === 0 ? (
+          <Text className="text-neutral-500 mt-4">
+            No children linked to your account.
+          </Text>
+        ) : (
+          <View className="flex-col gap-2 pt-4">
+            {children.map((child) => {
+              const name =
+                child.fullName ||
+                [child.firstName, child.lastName].filter(Boolean).join(" ") ||
+                "Unnamed";
+              const isLinked = !!child.currentBusId;
+
+              return (
+                <TouchableOpacity
+                  key={child.uid}
+                  className={`flex-col gap-4 bg-white p-4 rounded-lg shadow ${
+                    selectedChildUid === child.uid ? "border border-black" : ""
+                  }`}
+                  onPress={() => setSelectedChildUid(child.uid)}
+                >
+                  <View>
+                    <View className="flex-row items-center gap-4">
                       <Image
-                        source={icons.homeLocationIcon}
-                        style={{ height: 16, width: 16 }}
+                        source={images.childImage1}
+                        style={{ height: 48, width: 48, borderRadius: 24 }}
                       />
-                      <Text className="text-sm text-grayText">
-                        {child.homeLocation.address}
-                      </Text>
+                      <View className="flex-1">
+                        <Text
+                          className="text-lg font-semibold"
+                          numberOfLines={1}
+                        >
+                          {name}
+                        </Text>
+                        <Text
+                          className={`text-sm font-light ${
+                            isLinked ? "text-blue-700" : "text-rose-600"
+                          }`}
+                          numberOfLines={1}
+                        >
+                          {isLinked ? "Linked to Bus" : "Not Linked to Bus"}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View className="flex-row gap-2 ">
-                      <Text className="text-grayText">{`${child.homeLocation.latitude}"N`}</Text>
-                      <Text className="text-grayText">{`${child.homeLocation.longitude}"E`}</Text>
+                    <View className="flex-col gap-2 border-t border-gray-200 pt-2">
+                      <Text className="text-md text-grayText">Home:</Text>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <View className="flex-row gap-2 flex-1">
+                          <Image
+                            source={icons.homeLocationIcon}
+                            style={{ height: 16, width: 16 }}
+                          />
+                          <Text
+                            className="text-sm text-grayText flex-1"
+                            numberOfLines={2}
+                          >
+                            {(child as any)?.homeLocation?.address ?? "—"}
+                          </Text>
+                        </View>
+                        <View className="flex-row gap-2">
+                          <Text className="text-grayText">
+                            {typeof (child as any)?.homeLocation?.latitude ===
+                            "number"
+                              ? `${(child as any).homeLocation.latitude.toFixed(4)}°`
+                              : "—"}
+                          </Text>
+                          <Text className="text-grayText">
+                            {typeof (child as any)?.homeLocation?.longitude ===
+                            "number"
+                              ? `${(child as any).homeLocation.longitude.toFixed(4)}°`
+                              : "—"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text className="text-md text-grayText">School:</Text>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <View className="flex-row gap-2 flex-1">
+                          <Image
+                            source={icons.schoolLocationIcon}
+                            style={{ height: 16, width: 16 }}
+                          />
+                          <Text
+                            className="text-sm text-grayText flex-1"
+                            numberOfLines={2}
+                          >
+                            {(child as any)?.schoolLocation?.address ?? "—"}
+                          </Text>
+                        </View>
+                        <View className="flex-row gap-2">
+                          <Text className="text-grayText">
+                            {typeof (child as any)?.schoolLocation?.latitude ===
+                            "number"
+                              ? `${(child as any).schoolLocation.latitude.toFixed(4)}°`
+                              : "—"}
+                          </Text>
+                          <Text className="text-grayText">
+                            {typeof (child as any)?.schoolLocation
+                              ?.longitude === "number"
+                              ? `${(child as any).schoolLocation.longitude.toFixed(4)}°`
+                              : "—"}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
-                  <Text className="text-md text-grayText">School:</Text>
-                  <View className="flex-row items-center justify-between gap-2">
-                    <View className="flex-row gap-2">
-                      <Image
-                        source={icons.schoolLocationIcon}
-                        style={{ height: 16, width: 16 }}
-                      />
-                      <Text className="text-sm text-grayText">
-                        {child.schoolLocation.address}
-                      </Text>
-                    </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
-                    <View className="flex-row gap-2 ">
-                      <Text className="text-grayText">{`${child.schoolLocation.latitude}"N`}</Text>
-                      <Text className="text-grayText">{`${child.schoolLocation.longitude}"E`}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Date Picker Section */}
+        {/* Date Picker */}
         <View className="mt-6">
           <Text className="text-lg font-normal mb-2">Choose Date</Text>
           <TouchableOpacity
-            onPress={showDatepicker}
-            className="bg-white p-4 rounded-full shadow justify-between flex-row items-center gap-2"
-            style={{ height: 60 }} // Give it a fixed height for better touch area
+            onPress={() => setShowPicker(true)}
+            className="bg-white p-4 rounded-full shadow justify-between flex-row items-center"
+            style={{ height: 60 }}
           >
             <Text className="text-base text-grayText">
-              {/* Conditionally display date or placeholder */}
               {date ? date.toLocaleDateString() : "Choose Date"}
             </Text>
             <Image source={icons.calender} style={{ height: 24, width: 24 }} />
@@ -229,89 +300,94 @@ const NotifyDriverScreen = () => {
 
           {showPicker && (
             <DateTimePicker
-              testID="dateTimePicker"
-              // If date is null, provide a default starting date for the picker (e.g., today)
               value={date || today}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onChange}
+              onChange={onChangeDate}
               minimumDate={today}
               maximumDate={oneYearFromNow}
             />
           )}
-          <Text className="text-lg font-normal mb-2 mt-2 ">Choose Date</Text>
-          <View className="flex-row gap-2">
-            {defaultMessages.map((message) => (
+
+          <Text className="text-lg font-normal mb-2 mt-3">Message</Text>
+          <View className="flex-row gap-2 flex-wrap">
+            {DEFAULT_MESSAGES.map((m) => (
               <TouchableOpacity
-                key={message.id}
-                className="bg-bluesh p-4 rounded-full shadow"
-                onPress={() => setSelectedMessage(message.message)}
+                key={m.id}
+                className="bg-bluesh px-4 py-3 rounded-full shadow"
+                onPress={() => setSelectedMessage(m.message)}
                 style={{
                   borderColor:
-                    selectedMessage === message.message
-                      ? "black"
-                      : "transparent",
-                  borderWidth: selectedMessage === message.message ? 1 : 0,
+                    selectedMessage === m.message ? "black" : "transparent",
+                  borderWidth: selectedMessage === m.message ? 1 : 0,
                 }}
               >
                 <Text className="text-base text-grayText text-center">
-                  {message.message}
+                  {m.message}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
+
         <TouchableOpacity
-          className="bg-blue-500 p-4 rounded-full shadow mt-6"
-          onPress={handleSendMessage}
+          disabled={!canSend || sending}
+          className={`p-4 rounded-full shadow mt-6 ${
+            canSend && !sending ? "bg-blue-500" : "bg-neutral-300"
+          }`}
+          onPress={handleSend}
         >
-          <Text className="text-base text-white text-center">Send Message</Text>
+          {sending ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-base text-white text-center">
+              Send Message
+            </Text>
+          )}
         </TouchableOpacity>
 
-        <Text className="text-2xl font-light mt-6">Sent Messages</Text>
-        <View className="flex-col gap-4 mt-4">
-          {sentMessages.map((message) => {
-            const dateObj =
-              message.date instanceof Date
-                ? message.date
-                : new Date(message.date);
-            return (
-              <View
-                key={message.id}
-                className="flex-row items-center gap-4 bg-white p-4 rounded-lg shadow"
-              >
-                <Image
-                  source={message.childImage}
-                  style={{ height: 48, width: 48, borderRadius: 24 }}
-                />
-                {/* Apply flex-1 here to ensure this column takes up remaining space */}
-                <View className="flex-col justify-between flex-1">
-                  <View className="flex-row items-center justify-between">
-                    {/* Make childName flexible to shrink if needed */}
-                    <Text className="text-lg font-semibold flex-shrink-1">
-                      {message.childName}
-                    </Text>
-
-                    {/* Make date/time flexible to shrink if needed, and ensure it wraps */}
-                    <Text className="text-xs text-grayText text-right flex-shrink-1 ml-2">
-                      {dateObj.toLocaleDateString()}{" "}
-                      {dateObj.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
+        {/* Local sent log for the parent’s view */}
+        {sentMessages.length > 0 && (
+          <>
+            <Text className="text-2xl font-light mt-6">Sent Messages</Text>
+            <View className="flex-col gap-4 mt-4">
+              {sentMessages.map((m) => {
+                const d = m.date instanceof Date ? m.date : new Date(m.date);
+                return (
+                  <View
+                    key={m.id}
+                    className="flex-row items-center gap-4 bg-white p-4 rounded-lg shadow"
+                  >
+                    <Image
+                      source={m.childImage}
+                      style={{ height: 48, width: 48, borderRadius: 24 }}
+                    />
+                    <View className="flex-1">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-lg font-semibold flex-shrink">
+                          {m.childName}
+                        </Text>
+                        <Text className="text-xs text-grayText text-right ml-2">
+                          {d.toLocaleDateString()}{" "}
+                          {d.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      </View>
+                      <Text className="text-sm text-grayText mt-1">
+                        {m.message}
+                      </Text>
+                    </View>
                   </View>
-                  {/* Ensure message wraps */}
-                  <Text className="text-sm text-grayText mt-1">
-                    {message.message}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
 export default NotifyDriverScreen;
