@@ -45,11 +45,16 @@ import { subscribeMyChildren } from "@/data/users";
 import type { UserDoc as BaseUserDoc } from "@/types/user";
 import Header from "../Components/header";
 
+// live child location subscription
+import {
+  subscribeChildLiveLocation,
+  type ChildLiveLocation,
+} from "@/data/liveLocation";
+
 /* ------------------ Types ------------------ */
 type UserDoc = BaseUserDoc & {
   status?: string; // optional UI-only status
 };
-
 type BusForChild = (BusProfile & { id: string }) | null;
 
 /* ------------------ Map sizing ------------------ */
@@ -67,7 +72,7 @@ const childDisplayName = (u: UserDoc) =>
   [u.firstName, u.lastName].filter(Boolean).join(" ") ||
   "Unnamed";
 
-function getChildCoord(u: UserDoc): LatLng | undefined {
+function getFallbackCoord(u: UserDoc): LatLng | undefined {
   if (u.uid && HARDCODED_LOC[u.uid]) return HARDCODED_LOC[u.uid];
   const home = (u as any)?.homeLocation;
   if (
@@ -118,9 +123,25 @@ const labelForTourStatus = (s?: TourStatus | null): string | undefined => {
     case "NOT_GOING":
       return "Not Going";
     default:
-      return "Unknown"; // 👈 fixed typo
+      return "Unknown";
   }
 };
+
+/** Consider “live” if update is this recent */
+const LIVE_WINDOW_MS = 15 * 1000; // 15s so it flips fast after stop
+/** Tick so ages update even when Firestore is quiet */
+const TICK_EVERY_MS = 5 * 1000;
+
+function formatAgo(ms: number) {
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const d = Math.floor(hr / 24);
+  return `${d}d`;
+}
 
 /* ------------------ Screen ------------------ */
 const ParentHome = () => {
@@ -130,21 +151,34 @@ const ParentHome = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // childUid -> live bus profile (or null if not linked)
+  // bus
   const [busByChild, setBusByChild] = useState<Record<string, BusForChild>>({});
-  const busSubsRef = useRef<Record<string, (() => void) | undefined>>({}); // per child bus sub
+  const busSubsRef = useRef<Record<string, (() => void) | undefined>>({});
 
-  // childUid -> live tour status (today, current session)
+  // status
   const [tourStatusByChild, setTourStatusByChild] = useState<
     Record<string, TourStatus | null>
   >({});
-  const statusSubsRef = useRef<Record<string, (() => void) | undefined>>({}); // per child participant sub
+  const statusSubsRef = useRef<Record<string, (() => void) | undefined>>({});
+
+  // live geolocation
+  const [liveLocByChild, setLiveLocByChild] = useState<
+    Record<string, ChildLiveLocation>
+  >({});
+  const liveLocSubsRef = useRef<Record<string, (() => void) | undefined>>({});
+
+  // simple ticking clock so “LIVE/Last Xm” can age out
+  const [clock, setClock] = useState<number>(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setClock(Date.now()), TICK_EVERY_MS);
+    return () => clearInterval(id);
+  }, []);
 
   // contact modal
   const [contactVisible, setContactVisible] = useState(false);
   const [contactPhone, setContactPhone] = useState<string | null>(null);
 
-  // Full-screen map
+  // maps
   const [mapVisible, setMapVisible] = useState(false);
   const miniMapRef = useRef<MapView | null>(null);
   const fullMapRef = useRef<MapView | null>(null);
@@ -168,7 +202,6 @@ const ParentHome = () => {
 
   /* -------- Realtime: per-child bus profile -------- */
   useEffect(() => {
-    // clear existing bus subs
     Object.values(busSubsRef.current).forEach((u) => u?.());
     busSubsRef.current = {};
     setBusByChild({});
@@ -210,9 +243,8 @@ const ParentHome = () => {
     };
   }, [children]);
 
-  /* -------- Realtime: per-child participant status (today + current session) -------- */
+  /* -------- Realtime: per-child participant status -------- */
   useEffect(() => {
-    // clear previous status subs
     Object.values(statusSubsRef.current).forEach((u) => u?.());
     statusSubsRef.current = {};
     setTourStatusByChild({});
@@ -258,17 +290,87 @@ const ParentHome = () => {
     };
   }, [children, busByChild, dateKey, currentSession]);
 
-  /* -------- Map coords from children -------- */
-  const coords: { uid: string; name: string; coord: LatLng }[] = useMemo(() => {
+  /* -------- Realtime: per-child LIVE LOCATION -------- */
+  useEffect(() => {
+    Object.values(liveLocSubsRef.current).forEach((u) => u?.());
+    liveLocSubsRef.current = {};
+    setLiveLocByChild({});
+
+    if (!children || children.length === 0) return;
+
+    children.forEach((child) => {
+      const unsub = subscribeChildLiveLocation(child.uid, (loc) => {
+        setLiveLocByChild((prev) => ({ ...prev, [child.uid]: loc }));
+      });
+      liveLocSubsRef.current[child.uid] = unsub;
+    });
+
+    return () => {
+      Object.values(liveLocSubsRef.current).forEach((u) => u?.());
+      liveLocSubsRef.current = {};
+    };
+  }, [children]);
+
+  /* -------- Map coords from children (prefer LIVE) -------- */
+  const coords: {
+    uid: string;
+    name: string;
+    coord: LatLng;
+    isLive: boolean;
+    lastAgoMs: number | null;
+  }[] = useMemo(() => {
     if (!children) return [];
+    const now = clock; // <-- ticking clock keeps this fresh
+
     return children
       .map((c) => {
-        const coord = getChildCoord(c);
-        if (!coord) return null;
-        return { uid: c.uid, name: childDisplayName(c), coord };
+        const live = liveLocByChild[c.uid] as
+          | (ChildLiveLocation & { isSharing?: boolean })
+          | null;
+
+        if (
+          live &&
+          typeof live.lat === "number" &&
+          typeof live.lng === "number"
+        ) {
+          const age =
+            typeof (live as any).updatedAtMs === "number"
+              ? now - (live as any).updatedAtMs
+              : NaN;
+
+          // If your publisher writes `isSharing:false` on stop, honor it immediately.
+          const explicitlyOff = live && (live as any).isSharing === false;
+
+          const recent =
+            Number.isFinite(age) && age <= LIVE_WINDOW_MS && !explicitlyOff;
+
+          return {
+            uid: c.uid,
+            name: childDisplayName(c),
+            coord: { latitude: live.lat, longitude: live.lng },
+            isLive: !!recent,
+            lastAgoMs: Number.isFinite(age) ? age : null,
+          };
+        }
+
+        const fallback = getFallbackCoord(c);
+        if (!fallback) return null;
+        return {
+          uid: c.uid,
+          name: childDisplayName(c),
+          coord: fallback,
+          isLive: false,
+          lastAgoMs: null,
+        };
       })
-      .filter(Boolean) as { uid: string; name: string; coord: LatLng }[];
-  }, [children]);
+      .filter(Boolean) as {
+      uid: string;
+      name: string;
+      coord: LatLng;
+      isLive: boolean;
+      lastAgoMs: number | null;
+    }[];
+  }, [children, liveLocByChild, clock]); // <-- notice `clock`
 
   const initialRegion: Region = useMemo(() => {
     const first = coords[0]?.coord;
@@ -279,32 +381,6 @@ const ParentHome = () => {
       longitudeDelta: LONGITUDE_DELTA,
     };
   }, [coords]);
-
-  // Mini-map adjust after layout to avoid blank rendering
-  useEffect(() => {
-    if (!miniMapRef.current || coords.length === 0) return;
-    const timer = setTimeout(() => {
-      const c = coords.map((x) => x.coord);
-      if (c.length === 1) {
-        miniMapRef.current!.animateToRegion(
-          {
-            ...initialRegion,
-            latitude: c[0].latitude,
-            longitude: c[0].longitude,
-            latitudeDelta: 0.03,
-            longitudeDelta: 0.03,
-          },
-          400
-        );
-      } else {
-        miniMapRef.current!.fitToCoordinates(c, {
-          edgePadding: { top: 24, right: 24, bottom: 24, left: 24 },
-          animated: true,
-        });
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [coords, initialRegion]);
 
   /* ------------------ Actions ------------------ */
   const onRefresh = useCallback(async () => {
@@ -367,7 +443,6 @@ const ParentHome = () => {
     setContactVisible(false);
   };
 
-  // Footer offsets (adjust if you have a fixed footer/tab bar)
   const FIXED_FOOTER_HEIGHT = 120;
   const TAB_BAR_HEIGHT = 70;
   const TAB_BAR_BOTTOM_MARGIN = 36;
@@ -444,6 +519,57 @@ const ParentHome = () => {
     </View>
   );
 
+  // ---------- small chips legend shown in the map header ----------
+  const MapLegendChips = () => {
+    if (!coords.length) return null;
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 8 }}
+      >
+        {coords.map(({ uid, name, isLive, lastAgoMs }) => (
+          <View
+            key={uid}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: isLive ? "#DCFCE7" : "#E5E7EB",
+            }}
+          >
+            <Text
+              style={{
+                fontWeight: "700",
+                fontSize: 12,
+                color: isLive ? "#166534" : "#374151",
+                marginRight: 6,
+              }}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            <Text
+              style={{
+                fontWeight: "600",
+                fontSize: 12,
+                color: isLive ? "#166534" : "#374151",
+              }}
+            >
+              {isLive
+                ? "LIVE"
+                : lastAgoMs != null
+                  ? `Last ${formatAgo(lastAgoMs)}`
+                  : "No recent"}
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
   const ChildCard = ({ child }: { child: UserDoc }) => {
     const name = childDisplayName(child);
     const linkedBus = busByChild[child.uid];
@@ -459,12 +585,9 @@ const ParentHome = () => {
         ? `${linkedBus?.firstName ?? ""} ${linkedBus?.lastName ?? ""}`.trim()
         : "-";
 
-    // LIVE status from tours (today + current session)
     const liveStatus = tourStatusByChild[child.uid];
     const liveLabel = labelForTourStatus(liveStatus);
 
-    // Fallback (if no participant doc yet) — NOTE:
-    // If you prefer a different default, change the last "Unknown".
     const fallback =
       child.status === "Dropped"
         ? "Dropped"
@@ -627,7 +750,7 @@ const ParentHome = () => {
         {!loading && (
           <View className="w-full mt-5" style={{ zIndex: 1 }}>
             <View className="flex-row">
-              {/* Mini map (fixed: absolute-fill map, no Android clipping) */}
+              {/* Mini map */}
               <View
                 className="bg-white"
                 style={{
@@ -635,66 +758,74 @@ const ParentHome = () => {
                   height: 180,
                   marginRight: 8,
                   borderRadius: 16,
-                  overflow: Platform.OS === "ios" ? "hidden" : "visible", // 👈 important
+                  overflow: Platform.OS === "ios" ? "hidden" : "visible",
                   elevation: 3,
                   shadowOpacity: 0.08,
                   shadowRadius: 12,
                   shadowOffset: { width: 0, height: 6 },
                 }}
               >
-                <View className="flex-row items-center justify-between px-4 py-2 bg-white rounded-t-2xl">
-                  <Text className="text-lg font-semibold">Child Locations</Text>
-                  <View className="flex-row">
-                    <TouchableOpacity
-                      className="mr-3"
-                      onPress={() => setMapVisible(true)}
-                    >
-                      <Ionicons
-                        name="expand-outline"
-                        size={20}
-                        color="#2563EB"
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (!coords.length || !miniMapRef.current) return;
-                        const c = coords.map((x) => x.coord);
-                        if (c.length === 1) {
-                          miniMapRef.current.animateToRegion(
-                            {
-                              latitude: c[0].latitude,
-                              longitude: c[0].longitude,
-                              latitudeDelta: 0.03,
-                              longitudeDelta: 0.03,
-                            },
-                            300
-                          );
-                        } else {
-                          miniMapRef.current.fitToCoordinates(c, {
-                            edgePadding: {
-                              top: 24,
-                              right: 24,
-                              bottom: 24,
-                              left: 24,
-                            },
-                            animated: true,
-                          });
-                        }
-                      }}
-                    >
-                      <Ionicons
-                        name="locate-outline"
-                        size={20}
-                        color="#2563EB"
-                      />
-                    </TouchableOpacity>
+                {/* HEADER with chips legend */}
+                <View className="px-4 py-2 bg-white rounded-t-2xl">
+                  <View className="flex-row items-center justify-between mb-2">
+                    <Text className="text-lg font-semibold">
+                      Child Locations
+                    </Text>
+                    <View className="flex-row">
+                      <TouchableOpacity
+                        className="mr-3"
+                        onPress={() => setMapVisible(true)}
+                      >
+                        <Ionicons
+                          name="expand-outline"
+                          size={20}
+                          color="#2563EB"
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (!coords.length || !miniMapRef.current) return;
+                          const c = coords.map((x) => x.coord);
+                          if (c.length === 1) {
+                            miniMapRef.current.animateToRegion(
+                              {
+                                latitude: c[0].latitude,
+                                longitude: c[0].longitude,
+                                latitudeDelta: 0.03,
+                                longitudeDelta: 0.03,
+                              },
+                              300
+                            );
+                          } else {
+                            miniMapRef.current.fitToCoordinates(c, {
+                              edgePadding: {
+                                top: 24,
+                                right: 24,
+                                bottom: 24,
+                                left: 24,
+                              },
+                              animated: true,
+                            });
+                          }
+                        }}
+                      >
+                        <Ionicons
+                          name="locate-outline"
+                          size={20}
+                          color="#2563EB"
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
+
+                  {/* legend chips show LIVE / Last Xm in the header */}
+                  <MapLegendChips />
                 </View>
 
                 <View style={{ flex: 1 }}>
                   <MapView
                     ref={miniMapRef}
-                    style={StyleSheet.absoluteFillObject} // 👈 absolute fill
+                    style={StyleSheet.absoluteFillObject}
                     provider={
                       Platform.OS === "android" ? PROVIDER_GOOGLE : undefined
                     }
@@ -703,35 +834,6 @@ const ParentHome = () => {
                     zoomEnabled={false}
                     pitchEnabled={false}
                     rotateEnabled={false}
-                    onMapReady={() => {
-                      // post-layout fit to avoid blank frames
-                      setTimeout(() => {
-                        if (!miniMapRef.current || coords.length === 0) return;
-                        const c = coords.map((x) => x.coord);
-                        if (c.length === 1) {
-                          const s = c[0];
-                          miniMapRef.current.animateToRegion(
-                            {
-                              latitude: s.latitude,
-                              longitude: s.longitude,
-                              latitudeDelta: 0.03,
-                              longitudeDelta: 0.03,
-                            },
-                            300
-                          );
-                        } else {
-                          miniMapRef.current.fitToCoordinates(c, {
-                            edgePadding: {
-                              top: 24,
-                              right: 24,
-                              bottom: 24,
-                              left: 24,
-                            },
-                            animated: true,
-                          });
-                        }
-                      }, 120);
-                    }}
                   >
                     {coords.map(({ uid, name, coord }) => (
                       <Marker key={uid} coordinate={coord} title={name}>
@@ -821,79 +923,33 @@ const ParentHome = () => {
       {mapVisible && (
         <View className="absolute inset-0 bg-white" style={{ zIndex: 100 }}>
           <SafeAreaView className="flex-1">
-            <View className="px-4 py-3 flex-row items-center justify-between border-b border-neutral-200">
-              <Text className="text-lg font-semibold">Child Locations</Text>
-              <View className="flex-row">
-                <TouchableOpacity
-                  disabled={coords.length === 0}
-                  onPress={() =>
-                    coords.length &&
-                    openSystemMaps(coords[0].coord, coords[0].name)
-                  }
-                  className={`px-3 py-2 rounded-xl mr-2 ${
-                    coords.length ? "bg-blue-600" : "bg-neutral-300"
-                  }`}
-                >
-                  <Text className="text-white">Open in Maps</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setMapVisible(false)}
-                  className="px-3 py-2 rounded-xl bg-neutral-200"
-                >
-                  <Text>Close</Text>
-                </TouchableOpacity>
+            {/* HEADER with legend chips */}
+            <View className="px-4 py-3 border-b border-neutral-200">
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-lg font-semibold">Child Locations</Text>
+                <View className="flex-row">
+                  <TouchableOpacity
+                    disabled={!coords.length}
+                    onPress={() =>
+                      coords.length &&
+                      openSystemMaps(coords[0].coord, coords[0].name)
+                    }
+                    className={`px-3 py-2 rounded-xl mr-2 ${
+                      coords.length ? "bg-blue-600" : "bg-neutral-300"
+                    }`}
+                  >
+                    <Text className="text-white">Open in Maps</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setMapVisible(false)}
+                    className="px-3 py-2 rounded-xl bg-neutral-200"
+                  >
+                    <Text>Close</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-
-            {/* Full map toolbar */}
-            <View className="px-4 py-2 flex-row items-center justify-end bg-white border-b border-neutral-200">
-              <TouchableOpacity
-                className="flex-row items-center mr-3"
-                onPress={() => {
-                  if (!fullMapRef.current || coords.length === 0) return;
-                  const c = coords.map((x) => x.coord);
-                  if (c.length === 1) {
-                    const s = c[0];
-                    fullMapRef.current.animateToRegion(
-                      {
-                        latitude: s.latitude,
-                        longitude: s.longitude,
-                        latitudeDelta: 0.02,
-                        longitudeDelta: 0.02,
-                      },
-                      400
-                    );
-                  } else {
-                    fullMapRef.current.fitToCoordinates(c, {
-                      edgePadding: { top: 50, right: 50, bottom: 80, left: 50 },
-                      animated: true,
-                    });
-                  }
-                }}
-              >
-                <Ionicons name="scan-outline" size={18} color="#2563EB" />
-                <Text className="text-blue-600 ml-1">Fit All</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center"
-                onPress={() => {
-                  if (!fullMapRef.current || coords.length === 0) return;
-                  const s = coords[0].coord;
-                  fullMapRef.current.animateToRegion(
-                    {
-                      latitude: s.latitude,
-                      longitude: s.longitude,
-                      latitudeDelta: 0.02,
-                      longitudeDelta: 0.02,
-                    },
-                    400
-                  );
-                }}
-              >
-                <Ionicons name="pin-outline" size={18} color="#2563EB" />
-                <Text className="text-blue-600 ml-1">Center First</Text>
-              </TouchableOpacity>
+              {/* legend chips again, in full-screen header */}
+              <MapLegendChips />
             </View>
 
             <MapView

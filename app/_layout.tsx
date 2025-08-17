@@ -1,3 +1,4 @@
+import "@/data/locationPublisher";
 import { Stack } from "expo-router";
 import { AlertNotificationRoot } from "react-native-alert-notification";
 import { AuthProvider } from "./context/AuthContext";

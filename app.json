@@ -14,7 +14,9 @@
         "googleMapsApiKey": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We use your location to help you pick start and end points on the map."
+        "NSLocationWhenInUseUsageDescription": "We use your location to help you pick start and end points on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to share your trip safely with your parent.",
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
@@ -24,7 +26,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.rumeshsmrr.safeBus",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
