@@ -1,9 +1,9 @@
-// app/ParentHome.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import React, {
   useCallback,
   useEffect,
@@ -19,6 +19,7 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -31,6 +32,7 @@ import MapView, {
 } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { db } from "@/app/lib/firebase";
 import { images } from "@/constants/images";
 import { getApprovedBusForChild } from "@/data/busChildren";
 import {
@@ -38,6 +40,7 @@ import {
   subscribeBusProfileById,
   type BusProfile,
 } from "@/data/busProfiles";
+import { dateKeyFor, type TourSession, type TourStatus } from "@/data/tours";
 import { subscribeMyChildren } from "@/data/users";
 import type { UserDoc as BaseUserDoc } from "@/types/user";
 import Header from "../Components/header";
@@ -53,7 +56,7 @@ type BusForChild = (BusProfile & { id: string }) | null;
 const LATITUDE_DELTA = 0.0922;
 const LONGITUDE_DELTA = LATITUDE_DELTA * (9 / 16);
 
-/* ------------------ Hardcoded child coords (optional overrides) ------------------ */
+/* ------------------ Optional overrides ------------------ */
 const HARDCODED_LOC: Record<string, LatLng> = {
   // "childUid123": { latitude: 6.8856, longitude: 79.8596 },
 };
@@ -87,14 +90,35 @@ function getChildCoord(u: UserDoc): LatLng | undefined {
 
 const statusChipStyle = (status: string) => {
   switch (status) {
+    case "Pick In":
+      return { bg: "#DBEAFE", fg: "#1E40AF" };
     case "On Bus":
       return { bg: "#FFF2C6", fg: "#7A5C00" };
     case "Dropped":
       return { bg: "#DAFADD", fg: "#0B5D1E" };
     case "AB":
       return { bg: "#FCD9D9", fg: "#7C1D1D" };
+    case "Not Going":
+      return { bg: "#FCE7F3", fg: "#9D174D" };
     default:
       return { bg: "#EAEAEA", fg: "#444" };
+  }
+};
+
+const labelForTourStatus = (s?: TourStatus | null): string | undefined => {
+  switch (s) {
+    case "PICK_IN":
+      return "Pick In";
+    case "ON_BUS":
+      return "On Bus";
+    case "DROPPED":
+      return "Dropped";
+    case "ABSENT":
+      return "AB";
+    case "NOT_GOING":
+      return "Not Going";
+    default:
+      return "Unknown"; // 👈 fixed typo
   }
 };
 
@@ -108,7 +132,13 @@ const ParentHome = () => {
 
   // childUid -> live bus profile (or null if not linked)
   const [busByChild, setBusByChild] = useState<Record<string, BusForChild>>({});
-  const liveSubs = useRef<Record<string, (() => void) | undefined>>({}); // per child subscription cleanup
+  const busSubsRef = useRef<Record<string, (() => void) | undefined>>({}); // per child bus sub
+
+  // childUid -> live tour status (today, current session)
+  const [tourStatusByChild, setTourStatusByChild] = useState<
+    Record<string, TourStatus | null>
+  >({});
+  const statusSubsRef = useRef<Record<string, (() => void) | undefined>>({}); // per child participant sub
 
   // contact modal
   const [contactVisible, setContactVisible] = useState(false);
@@ -119,7 +149,14 @@ const ParentHome = () => {
   const miniMapRef = useRef<MapView | null>(null);
   const fullMapRef = useRef<MapView | null>(null);
 
-  // Subscribe to this parent's children in realtime
+  // Today/session
+  const [dateKey] = useState<string>(() => dateKeyFor());
+  const currentSession: TourSession = useMemo(
+    () => (new Date().getHours() < 12 ? "morning" : "evening"),
+    []
+  );
+
+  /* -------- Realtime: my children -------- */
   useEffect(() => {
     const unsub = subscribeMyChildren((kids) => {
       setChildren(kids);
@@ -129,11 +166,11 @@ const ParentHome = () => {
     return () => unsub?.();
   }, []);
 
-  // For each child, resolve the connected bus then live-subscribe
+  /* -------- Realtime: per-child bus profile -------- */
   useEffect(() => {
-    // clear existing subs
-    Object.values(liveSubs.current).forEach((u) => u?.());
-    liveSubs.current = {};
+    // clear existing bus subs
+    Object.values(busSubsRef.current).forEach((u) => u?.());
+    busSubsRef.current = {};
     setBusByChild({});
 
     if (!children || children.length === 0) return;
@@ -160,7 +197,7 @@ const ParentHome = () => {
             (bus) => setBusByChild((prev) => ({ ...prev, [child.uid]: bus })),
             () => setBusByChild((prev) => ({ ...prev, [child.uid]: null }))
           );
-          liveSubs.current[child.uid] = unsub;
+          busSubsRef.current[child.uid] = unsub;
         } catch {
           setBusByChild((prev) => ({ ...prev, [child.uid]: null }));
         }
@@ -168,12 +205,60 @@ const ParentHome = () => {
     });
 
     return () => {
-      Object.values(liveSubs.current).forEach((u) => u?.());
-      liveSubs.current = {};
+      Object.values(busSubsRef.current).forEach((u) => u?.());
+      busSubsRef.current = {};
     };
   }, [children]);
 
-  // Build coords from children (with overrides)
+  /* -------- Realtime: per-child participant status (today + current session) -------- */
+  useEffect(() => {
+    // clear previous status subs
+    Object.values(statusSubsRef.current).forEach((u) => u?.());
+    statusSubsRef.current = {};
+    setTourStatusByChild({});
+
+    if (!children || children.length === 0) return;
+
+    children.forEach((child) => {
+      const bus = busByChild[child.uid];
+      const busDocId = bus?.id;
+      if (!busDocId) {
+        setTourStatusByChild((prev) => ({ ...prev, [child.uid]: null }));
+        return;
+      }
+
+      const dayId = `${busDocId}_${dateKey}`;
+      const pRef = doc(
+        collection(doc(db, "tours", dayId), "participants"),
+        child.uid
+      );
+
+      const unsub = onSnapshot(
+        pRef,
+        (snap) => {
+          if (!snap.exists()) {
+            setTourStatusByChild((prev) => ({ ...prev, [child.uid]: null }));
+            return;
+          }
+          const data = snap.data() as any;
+          const st: TourStatus | null = data?.[currentSession]?.status ?? null;
+          setTourStatusByChild((prev) => ({ ...prev, [child.uid]: st }));
+        },
+        () => {
+          setTourStatusByChild((prev) => ({ ...prev, [child.uid]: null }));
+        }
+      );
+
+      statusSubsRef.current[child.uid] = unsub;
+    });
+
+    return () => {
+      Object.values(statusSubsRef.current).forEach((u) => u?.());
+      statusSubsRef.current = {};
+    };
+  }, [children, busByChild, dateKey, currentSession]);
+
+  /* -------- Map coords from children -------- */
   const coords: { uid: string; name: string; coord: LatLng }[] = useMemo(() => {
     if (!children) return [];
     return children
@@ -195,33 +280,36 @@ const ParentHome = () => {
     };
   }, [coords]);
 
+  // Mini-map adjust after layout to avoid blank rendering
   useEffect(() => {
     if (!miniMapRef.current || coords.length === 0) return;
-    const c = coords.map((x) => x.coord);
-    if (c.length === 1) {
-      miniMapRef.current.animateToRegion(
-        {
-          ...initialRegion,
-          latitude: c[0].latitude,
-          longitude: c[0].longitude,
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
-        },
-        400
-      );
-    } else {
-      miniMapRef.current.fitToCoordinates(c, {
-        edgePadding: { top: 24, right: 24, bottom: 24, left: 24 },
-        animated: true,
-      });
-    }
+    const timer = setTimeout(() => {
+      const c = coords.map((x) => x.coord);
+      if (c.length === 1) {
+        miniMapRef.current!.animateToRegion(
+          {
+            ...initialRegion,
+            latitude: c[0].latitude,
+            longitude: c[0].longitude,
+            latitudeDelta: 0.03,
+            longitudeDelta: 0.03,
+          },
+          400
+        );
+      } else {
+        miniMapRef.current!.fitToCoordinates(c, {
+          edgePadding: { top: 24, right: 24, bottom: 24, left: 24 },
+          animated: true,
+        });
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, [coords, initialRegion]);
 
   /* ------------------ Actions ------------------ */
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // subs are live; we just simulate a refresh touchpoint
     setTimeout(() => setRefreshing(false), 700);
   }, []);
 
@@ -274,7 +362,6 @@ const ParentHome = () => {
     if (contactPhone) Linking.openURL(`tel:${contactPhone}`);
     setContactVisible(false);
   };
-
   const smsPhone = () => {
     if (contactPhone) Linking.openURL(`sms:${contactPhone}`);
     setContactVisible(false);
@@ -372,14 +459,22 @@ const ParentHome = () => {
         ? `${linkedBus?.firstName ?? ""} ${linkedBus?.lastName ?? ""}`.trim()
         : "-";
 
-    const status = child.currentBusId
-      ? "On Bus"
-      : child.status === "Dropped"
+    // LIVE status from tours (today + current session)
+    const liveStatus = tourStatusByChild[child.uid];
+    const liveLabel = labelForTourStatus(liveStatus);
+
+    // Fallback (if no participant doc yet) — NOTE:
+    // If you prefer a different default, change the last "Unknown".
+    const fallback =
+      child.status === "Dropped"
         ? "Dropped"
         : child.status === "AB"
           ? "AB"
-          : "Unknown";
+          : child.status === "Not Going"
+            ? "Not Going"
+            : "Unknown";
 
+    const status = liveLabel ?? fallback;
     const chip = statusChipStyle(status);
 
     return (
@@ -447,11 +542,13 @@ const ParentHome = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              // onPress={() =>
-              //   openContactSheet(
-              //     linkedBus?.contactNumber || child?.contactNumber || null
-              //   )
-              // }
+              onPress={() =>
+                openContactSheet(
+                  linkedBus?.contactNumber ||
+                    (child as any)?.contactNumber ||
+                    null
+                )
+              }
               className="flex-row items-center"
             >
               <Ionicons name="call-outline" size={18} color="#2563EB" />
@@ -473,7 +570,7 @@ const ParentHome = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-light-100">
-      {/* Keep gradient behind everything & non-interactive */}
+      {/* Background gradient */}
       <View
         style={{ position: "absolute", inset: 0, zIndex: 0 }}
         pointerEvents="none"
@@ -521,7 +618,7 @@ const ParentHome = () => {
           </View>
         )}
 
-        {/* Child cards from DB */}
+        {/* Child cards */}
         {!loading &&
           children &&
           children.map((c) => <ChildCard key={c.uid} child={c} />)}
@@ -530,20 +627,22 @@ const ParentHome = () => {
         {!loading && (
           <View className="w-full mt-5" style={{ zIndex: 1 }}>
             <View className="flex-row">
-              {/* Mini map */}
+              {/* Mini map (fixed: absolute-fill map, no Android clipping) */}
               <View
-                className="rounded-2xl overflow-hidden bg-white"
+                className="bg-white"
                 style={{
                   flex: 1,
                   height: 180,
                   marginRight: 8,
+                  borderRadius: 16,
+                  overflow: Platform.OS === "ios" ? "hidden" : "visible", // 👈 important
                   elevation: 3,
                   shadowOpacity: 0.08,
                   shadowRadius: 12,
                   shadowOffset: { width: 0, height: 6 },
                 }}
               >
-                <View className="flex-row items-center justify-between px-4 py-2 bg-white">
+                <View className="flex-row items-center justify-between px-4 py-2 bg-white rounded-t-2xl">
                   <Text className="text-lg font-semibold">Child Locations</Text>
                   <View className="flex-row">
                     <TouchableOpacity
@@ -592,32 +691,63 @@ const ParentHome = () => {
                   </View>
                 </View>
 
-                <MapView
-                  ref={miniMapRef}
-                  className="flex-1"
-                  provider={
-                    Platform.OS === "android" ? PROVIDER_GOOGLE : undefined
-                  }
-                  initialRegion={initialRegion}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                  pitchEnabled={false}
-                  rotateEnabled={false}
-                >
-                  {coords.map(({ uid, name, coord }) => (
-                    <Marker key={uid} coordinate={coord} title={name}>
-                      <View className="w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500">
-                        <Image
-                          source={images.childImage1}
-                          className="w-full h-full"
-                        />
-                      </View>
-                    </Marker>
-                  ))}
-                </MapView>
+                <View style={{ flex: 1 }}>
+                  <MapView
+                    ref={miniMapRef}
+                    style={StyleSheet.absoluteFillObject} // 👈 absolute fill
+                    provider={
+                      Platform.OS === "android" ? PROVIDER_GOOGLE : undefined
+                    }
+                    initialRegion={initialRegion}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    pitchEnabled={false}
+                    rotateEnabled={false}
+                    onMapReady={() => {
+                      // post-layout fit to avoid blank frames
+                      setTimeout(() => {
+                        if (!miniMapRef.current || coords.length === 0) return;
+                        const c = coords.map((x) => x.coord);
+                        if (c.length === 1) {
+                          const s = c[0];
+                          miniMapRef.current.animateToRegion(
+                            {
+                              latitude: s.latitude,
+                              longitude: s.longitude,
+                              latitudeDelta: 0.03,
+                              longitudeDelta: 0.03,
+                            },
+                            300
+                          );
+                        } else {
+                          miniMapRef.current.fitToCoordinates(c, {
+                            edgePadding: {
+                              top: 24,
+                              right: 24,
+                              bottom: 24,
+                              left: 24,
+                            },
+                            animated: true,
+                          });
+                        }
+                      }, 120);
+                    }}
+                  >
+                    {coords.map(({ uid, name, coord }) => (
+                      <Marker key={uid} coordinate={coord} title={name}>
+                        <View className="w-9 h-9 rounded-full overflow-hidden border-2 border-blue-500">
+                          <Image
+                            source={images.childImage1}
+                            className="w-full h-full"
+                          />
+                        </View>
+                      </Marker>
+                    ))}
+                  </MapView>
+                </View>
               </View>
 
-              {/* Emergency tile — responsive width to avoid overlap */}
+              {/* Emergency tile */}
               <TouchableOpacity
                 className="rounded-2xl overflow-hidden"
                 onPress={() => {
@@ -628,7 +758,7 @@ const ParentHome = () => {
                 }}
                 activeOpacity={0.9}
                 style={{
-                  flex: 0.75, // instead of fixed width; prevents overlap on small screens
+                  flex: 0.75,
                   height: 180,
                   marginLeft: 8,
                   elevation: 3,
@@ -687,26 +817,7 @@ const ParentHome = () => {
         </View>
       </ScrollView>
 
-      {/* Floating Emergency FAB (always on top, no overlap) */}
-      <TouchableOpacity
-        onPress={() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          router.push("/EmergencyScreen" as any);
-        }}
-        className="absolute right-5 bottom-7 w-14 h-14 rounded-full items-center justify-center"
-        style={{
-          backgroundColor: "#ef4444",
-          zIndex: 50,
-          elevation: 8,
-          shadowOpacity: 0.2,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-        }}
-      >
-        <Ionicons name="alert" size={22} color="#fff" />
-      </TouchableOpacity>
-
-      {/* Full-screen map overlay (highest z-index) */}
+      {/* Full-screen map overlay */}
       {mapVisible && (
         <View className="absolute inset-0 bg-white" style={{ zIndex: 100 }}>
           <SafeAreaView className="flex-1">
@@ -719,7 +830,9 @@ const ParentHome = () => {
                     coords.length &&
                     openSystemMaps(coords[0].coord, coords[0].name)
                   }
-                  className={`px-3 py-2 rounded-xl mr-2 ${coords.length ? "bg-blue-600" : "bg-neutral-300"}`}
+                  className={`px-3 py-2 rounded-xl mr-2 ${
+                    coords.length ? "bg-blue-600" : "bg-neutral-300"
+                  }`}
                 >
                   <Text className="text-white">Open in Maps</Text>
                 </TouchableOpacity>
