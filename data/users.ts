@@ -20,6 +20,7 @@ import {
 const USERS = "users";
 
 // data/users.ts
+// data/users.ts
 function toUserDoc(snap: DocumentSnapshot): UserDoc | null {
   if (!snap.exists()) return null;
   const data = snap.data() as any;
@@ -36,7 +37,11 @@ function toUserDoc(snap: DocumentSnapshot): UserDoc | null {
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
 
-    // ✅ include these so the subscription returns them
+    // NEW — make sure these are surfaced
+    contactNumber: data.contactNumber ?? null,
+    trustedContactNumber: data.trustedContactNumber ?? null,
+    studentPhone: data.studentPhone ?? null,
+
     homeLocation: data.homeLocation ?? null,
     schoolLocation: data.schoolLocation ?? null,
   };

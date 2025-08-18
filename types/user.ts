@@ -1,9 +1,12 @@
+// types/user.ts
 export type UserRole = "parent" | "bus" | "student";
+
 export interface GeoAddress {
   address: string;
   latitude: number;
   longitude: number;
 }
+
 export interface UserDoc {
   uid: string;
   role: UserRole;
@@ -12,21 +15,25 @@ export interface UserDoc {
   firstName?: string | null;
   lastName?: string | null;
 
-  // optional fields you already use
   parentCode?: string | null;
   parentUid?: string | null;
   currentBusId?: string | null;
 
-  // timestamps (Firestore)
   createdAt?: any;
   updatedAt?: any;
 
-  // NEW
+  // NEW — phones
+  contactNumber?: string | null; // parent’s phone (E.164)
+  trustedContactNumber?: string | null; // trusted person’s phone (E.164)
+
+  // Optional if you plan to store a child’s own phone
+  studentPhone?: string | null; // student/child phone (if you use it)
+
   homeLocation?: GeoAddress | null;
   schoolLocation?: GeoAddress | null;
 }
 
-/** Prefer fullName; fallback to first + last; then email; then "User" */
+/** Prefer fullName; fallback… */
 export const displayNameOf = (u: Partial<UserDoc>): string =>
   (u.fullName && u.fullName.trim()) ||
   [u.firstName, u.lastName].filter(Boolean).join(" ").trim() ||
