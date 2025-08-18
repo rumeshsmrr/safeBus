@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+// app/BuddySystemScreen.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
-  ImageSourcePropType,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -10,137 +11,220 @@ import {
   View,
 } from "react-native";
 
-import { images } from "@/constants/images"; // Assuming this path is correct
-import Header2 from "./Components/header2"; // Assuming this path is correct
+import { images } from "@/constants/images";
+import Header2 from "./Components/header2";
+
+import {
+  respondToBuddyRequest,
+  sendBuddyRequest,
+  setBuddyActive,
+  subscribeIncomingRequests,
+  subscribeMyBuddyLinks,
+  subscribeMyChildren,
+  subscribePeersOnBus,
+} from "@/data/buddy";
+
+import type { BuddyLinkDoc, PeerStudent } from "@/types/buddy";
 
 const scrollViewBottomPadding = 24;
 
-interface Buddy {
-  // Renamed interface to Buddy (PascalCase is convention)
-  name: string;
-  image: ImageSourcePropType;
-  phoneNumber: string;
-  parentName: string;
-  parentPhoneNumber: string;
-  yourChildName: string;
-  isActive: boolean; // This property will be managed per buddy
-}
+const Chip = ({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className={`px-3 py-1 rounded-full mr-2 mb-2 ${active ? "bg-blue-600" : "bg-gray-200"}`}
+    activeOpacity={0.85}
+  >
+    <Text className={`${active ? "text-white" : "text-gray-800"} text-sm`}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
 
-interface NewBuddyRequest {
-  // This interface is not used in the current code, but can be defined if needed
-  name: string;
-  image: ImageSourcePropType;
-  phoneNumber: string;
-  parentName: string;
-  parentPhoneNumber: string;
-  yourChildName: string;
-}
+const Badge = ({
+  text,
+  tone = "gray",
+}: {
+  text: string;
+  tone?: "green" | "blue" | "gray" | "red";
+}) => {
+  const map: Record<string, string> = {
+    green: "bg-green-100 text-green-800",
+    blue: "bg-blue-100 text-blue-800",
+    gray: "bg-gray-100 text-gray-800",
+    red: "bg-red-100 text-red-800",
+  };
+  return (
+    <View className={`px-3 py-1 rounded-full ${map[tone]}`}>
+      <Text className="text-xs font-semibold">{text}</Text>
+    </View>
+  );
+};
 
-interface child {
-  childname: string;
-  childimage: ImageSourcePropType;
-  childId: string;
-}
-
-const tempImage = images.childImage1; // Renamed to tempImage (camelCase convention)
+const SkeletonRow = () => (
+  <View className="bg-white rounded-2xl p-4 w-full shadow mb-3">
+    <View className="flex-row items-center gap-3">
+      <View className="w-12 h-12 bg-gray-200/60 rounded-full" />
+      <View className="flex-1">
+        <View className="h-4 bg-gray-200/60 rounded mb-2 w-2/3" />
+        <View className="h-3 bg-gray-200/60 rounded w-1/3" />
+      </View>
+    </View>
+  </View>
+);
 
 const BuddySystemScreen = () => {
+  // Children of current parent
+  const [kids, setKids] = useState<PeerStudent[]>([]);
+  const [selectedChildUid, setSelectedChildUid] = useState<string | null>(null);
+  const selectedChild = useMemo(
+    () => kids.find((k) => k.uid === selectedChildUid) ?? null,
+    [kids, selectedChildUid]
+  );
+
+  // Peers on same bus
+  const [peers, setPeers] = useState<PeerStudent[]>([]);
+  const [loadingPeers, setLoadingPeers] = useState(true);
+
+  // Buddy links (mine) and incoming requests
+  const [links, setLinks] = useState<BuddyLinkDoc[]>([]);
+  const [incoming, setIncoming] = useState<BuddyLinkDoc[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(true);
+  const [loadingIncoming, setLoadingIncoming] = useState(true);
+
+  // UI state for sending request
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [selectedBuddy, setSelectedBuddy] = useState<Buddy | null>(null); // Use state for selected buddy
-  const [selectedChild, setSelectedChild] = useState<child | null>(null); // State for selected child
+  const [pendingPeer, setPendingPeer] = useState<PeerStudent | null>(null);
+  const [sending, setSending] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
 
-  const handleOpenModal = (buddy: Buddy) => {
-    // This function will be used to open the modal with the selected buddy
-    setIsModalVisible(true);
-    setSelectedBuddy(buddy);
-    // You can set the selected buddy here if needed
-  };
-
-  const handleCloseModal = () => {
-    // This function will be used to close the modal
-    setIsModalVisible(false);
-    setSelectedBuddy(null); // Clear selected buddy when closing
-  };
-
-  const [buddies, setBuddies] = useState<Buddy[]>([
-    {
-      name: "Delisha Samoshi",
-      image: tempImage,
-      phoneNumber: "123-456-7890",
-      parentName: "Shenuki",
-      parentPhoneNumber: "098-765-4321",
-      yourChildName: "Alice Doe",
-      isActive: true, // Initial state for this buddy
-    },
-    // Add more buddies here if needed, each with their own isActive property
-    // {
-    //   name: "Another Buddy",
-    //   image: tempImage,
-    //   phoneNumber: "111-222-3333",
-    //   parentName: "Another Parent",
-    //   parentPhoneNumber: "444-555-6666",
-    //   yourChildName: "Bob Doe",
-    //   isActive: false,
-    // },
-  ]);
-
-  const newBuddyRequests: NewBuddyRequest[] = [
-    {
-      name: "Delisha Samiksha",
-      image: tempImage,
-      phoneNumber: "123-456-7890",
-      parentName: "Shenuki",
-      parentPhoneNumber: "098-765-4321",
-      yourChildName: "Alice Doe",
-    },
-    // Add more requests here if needed
-  ];
-
-  const newBuddies = [
-    {
-      name: "Delisha Samoshi",
-      image: tempImage,
-      phoneNumber: "123-456-7890",
-      parentName: "Shenuki",
-      parentPhoneNumber: "098-765-4321",
-      yourChildName: "Alice Doe",
-      isActive: true, // Initial state for this buddy
-    },
-    {
-      name: "Another Buddy",
-      image: tempImage,
-      phoneNumber: "111-222-3333",
-      parentName: "Another Parent",
-      parentPhoneNumber: "444-555-6666",
-      yourChildName: "Bob Doe",
-      isActive: false, // Initial state for this buddy
-    },
-  ];
-
-  const yourChild: child[] = [
-    {
-      childname: "Alice Doe",
-      childimage: tempImage,
-      childId: "child1", // Example ID, can be any unique identifier
-    },
-  ];
-
-  // This function now takes the ID (or index) of the buddy to toggle
-  const toggleBuddySwitch = (indexToToggle: number) => {
-    // Create a new array with the updated buddy
-    const updatedBuddies = buddies.map((buddy, index) => {
-      if (index === indexToToggle) {
-        return { ...buddy, isActive: !buddy.isActive }; // Toggle isActive for the specific buddy
-      }
-      return buddy; // Return other buddies unchanged
+  // Subscribe my children
+  useEffect(() => {
+    const unsub = subscribeMyChildren((rows) => {
+      setKids(rows);
+      if (!selectedChildUid && rows.length > 0)
+        setSelectedChildUid(rows[0].uid);
     });
-    setBuddies(updatedBuddies); // Update the state with the new array
-  };
+    return () => unsub?.();
+  }, []);
+
+  // Subscribe my buddy links (all)
+  useEffect(() => {
+    setLoadingLinks(true);
+    const unsub = subscribeMyBuddyLinks((rows) => {
+      setLinks(rows);
+      setLoadingLinks(false);
+    });
+    return () => unsub?.();
+  }, []);
+
+  // Subscribe incoming requests (to confirm/reject)
+  useEffect(() => {
+    setLoadingIncoming(true);
+    const unsub = subscribeIncomingRequests((rows) => {
+      setIncoming(rows);
+      setLoadingIncoming(false);
+    });
+    return () => unsub?.();
+  }, []);
+
+  // Subscribe peers on the same bus as selected child
+  useEffect(() => {
+    if (!selectedChild?.currentBusId) {
+      setPeers([]);
+      setLoadingPeers(false);
+      return;
+    }
+    setLoadingPeers(true);
+    const unsub = subscribePeersOnBus(
+      selectedChild.currentBusId,
+      selectedChild.uid,
+      (rows) => {
+        setPeers(rows);
+        setLoadingPeers(false);
+      }
+    );
+    return () => unsub?.();
+  }, [selectedChild?.uid, selectedChild?.currentBusId]);
+
+  // Derived sets for current child
+  const childBuddyLinks = useMemo(() => {
+    if (!selectedChildUid) return [];
+    return links.filter((l) => l.childUids.includes(selectedChildUid));
+  }, [links, selectedChildUid]);
+
+  const activeBuddies = useMemo(
+    () => childBuddyLinks.filter((l) => l.status === "active"),
+    [childBuddyLinks]
+  );
+
+  const pendingWithChild = useMemo(() => {
+    if (!selectedChildUid) return new Set<string>();
+    const s = new Set<string>();
+    childBuddyLinks.forEach((l) => {
+      const peerId =
+        l.childUids[0] === selectedChildUid ? l.childUids[1] : l.childUids[0];
+      if (l.status === "pending") s.add(peerId);
+      if (l.status === "active") s.add(peerId);
+    });
+    return s;
+  }, [childBuddyLinks, selectedChildUid]);
+
+  // Actions
+  function openSendModal(peer: PeerStudent) {
+    setPendingPeer(peer);
+    setIsModalVisible(true);
+  }
+  function closeSendModal() {
+    if (sending) return;
+    setIsModalVisible(false);
+    setPendingPeer(null);
+  }
+  async function confirmSend() {
+    if (!pendingPeer || !selectedChildUid) return;
+    try {
+      setSending(true);
+      await sendBuddyRequest(selectedChildUid, pendingPeer.uid);
+      closeSendModal();
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to send request");
+    } finally {
+      setSending(false);
+    }
+  }
+  async function toggleActive(link: BuddyLinkDoc) {
+    try {
+      setTogglingId(link.id);
+      await setBuddyActive(link.id, !link.active);
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to update");
+    } finally {
+      setTogglingId(null);
+    }
+  }
+  async function respond(linkId: string, accept: boolean) {
+    try {
+      setRespondingId(linkId);
+      await respondToBuddyRequest(linkId, accept);
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to update request");
+    } finally {
+      setRespondingId(null);
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
       <Header2 />
-      {/* Main scrollable content area */}
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
@@ -148,237 +232,279 @@ const BuddySystemScreen = () => {
           paddingBottom: scrollViewBottomPadding,
         }}
       >
-        <Text className="text-2xl font-light mt-4">Buddy System</Text>
+        <Text className="text-2xl font-semibold mt-2">Buddy System</Text>
 
-        <Text className="text-xl font-light mt-4">Your Child&apos;s Buddy</Text>
+        {/* Child selector */}
+        <Text className="text-sm text-gray-600 mt-2">Choose your child</Text>
+        <View className="flex-row flex-wrap mt-2">
+          {kids.length === 0 ? (
+            <Text className="text-gray-500 mt-1">No children linked.</Text>
+          ) : (
+            kids.map((k) => (
+              <Chip
+                key={k.uid}
+                label={k.fullName ?? "Student"}
+                active={selectedChildUid === k.uid}
+                onPress={() => setSelectedChildUid(k.uid)}
+              />
+            ))
+          )}
+        </View>
 
-        {/* Removed redundant TouchableOpacity wrapping the entire buddy list map.
-            Each buddy item itself should be a TouchableOpacity if it opens a modal on tap. */}
+        {/* Active Buddies */}
+        <View className="mt-6">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xl font-medium">Your Child’s Buddies</Text>
+            {loadingLinks ? <ActivityIndicator /> : null}
+          </View>
 
-        {buddies.map((buddy: Buddy, index: number) => (
-          <TouchableOpacity // Make each buddy item itself tappable
-            key={index}
-            // This will open the modal, but it's a generic modal for now
-            className="flex-col items-center mt-4 bg-white p-4 rounded-lg shadow-sm w-full"
-          >
-            <View className="flex-1 w-full items-start gap-2 mt-2 flex-row">
-              <Image source={buddy.image} className="w-12 h-12 rounded-full" />
-
-              <View className="ml-4 flex-1 items-start justify-start flex-col">
-                {/* This inner ml-4 flex-1 flex-col seems redundant and adds extra spacing */}
-                {/* <View className="ml-4 flex-1 flex-col"> */}
-                <View className="flex-row items-center w-full justify-between">
-                  <Text className="text-lg font-semibold mb-[-4px]">
-                    {/* Added negative margin to reduce gap */}
-                    {buddy.name}
-                  </Text>
-
-                  <View className="flex-row gap-2 items-center">
-                    <Text className="text-sm text-gray-500">
-                      {buddy.isActive ? "Active" : "Inactive"}
-                    </Text>
-                    <TouchableOpacity
-                      className={`flex-row items-center w-[50px] ${buddy.isActive ? "justify-end" : "justify-start"} rounded-full bg-bluesh`}
-                      onPress={() => toggleBuddySwitch(index)} // Pass the index to toggle the correct buddy
-                    >
-                      <View
-                        className={` ${buddy.isActive ? "bg-blue-600" : "bg-blue-300"} w-[25px] h-[25px]  rounded-full`}
+          {loadingLinks ? (
+            <>
+              <SkeletonRow />
+              <SkeletonRow />
+            </>
+          ) : activeBuddies.length === 0 ? (
+            <View className="w-full items-start justify-center py-4">
+              <Text className="text-gray-500">No buddies yet.</Text>
+            </View>
+          ) : (
+            activeBuddies.map((l) => {
+              const peerChildUid =
+                selectedChildUid && l.childUids[0] === selectedChildUid
+                  ? l.childUids[1]
+                  : l.childUids[0];
+              return (
+                <View
+                  key={l.id}
+                  className="flex-col items-center mt-3 bg-white p-4 rounded-lg shadow-sm w-full"
+                >
+                  <View className="w-full flex-row items-start justify-between">
+                    <View className="flex-row items-center gap-3">
+                      <Image
+                        source={images.childImage1}
+                        className="w-12 h-12 rounded-full"
                       />
+                      <View>
+                        <Text className="text-base font-semibold">
+                          Buddy child:{" "}
+                          {l.requestedChildName ||
+                            l.requesterChildName ||
+                            peerChildUid}
+                        </Text>
+                        <Text className="text-gray-500 text-xs">
+                          {l.busNumber ? `Bus ${l.busNumber}` : "Bus —"}
+                          {l.busNickname ? ` • ${l.busNickname}` : ""}
+                        </Text>
+                      </View>
+                    </View>
+                    <Badge
+                      text={l.active ? "Active" : "Inactive"}
+                      tone={l.active ? "green" : "gray"}
+                    />
+                  </View>
+
+                  <View className="w-full flex-row justify-end mt-3">
+                    <TouchableOpacity
+                      className={`px-4 py-2 rounded-lg ${togglingId === l.id ? "bg-blue-600/70" : "bg-blue-600"}`}
+                      onPress={() => toggleActive(l)}
+                      disabled={togglingId === l.id}
+                      activeOpacity={0.85}
+                    >
+                      {togglingId === l.id ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-white">
+                          {l.active ? "Pause" : "Resume"}
+                        </Text>
+                      )}
                     </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-            </View>
-            <View className="flex-row w-full items-center justify-between mt-2">
-              <Text className="text-sm text-blue-500">
-                {buddy.yourChildName}&apos;s Buddy
-              </Text>
-              <View className="ml-2">
-                <Text className="text-sm text-gray-500">
-                  {buddy.phoneNumber}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-row w-full items-center justify-between mt-2">
-              <Text className="text-sm text-green-500">
-                {buddy.parentName}&apos;s Child
-              </Text>
-              <View className="ml-2">
-                <Text className="text-sm text-gray-500">
-                  {buddy.parentPhoneNumber}
-                </Text>
-              </View>
-            </View>
-            {/* </View> */}
-          </TouchableOpacity>
-        ))}
+              );
+            })
+          )}
+        </View>
 
-        <Text className="text-xl font-light mt-4">New Buddy Request</Text>
-
-        {newBuddyRequests.map((buddy: NewBuddyRequest, index: number) => (
-          <View
-            key={index}
-            className="flex-col items-center mt-4 bg-white p-4 rounded-lg shadow-sm w-full"
-          >
-            <View className="flex-1 w-full items-start gap-2 mt-2 flex-row">
-              <Image source={buddy.image} className="w-12 h-12 rounded-full" />
-
-              <View className="ml-4 flex-1 items-start justify-start flex-col">
-                <View className="flex-row items-center w-full justify-between">
-                  <Text className="text-lg font-semibold mb-[-4px]">
-                    {buddy.name}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <View className="flex-row w-full items-center justify-between mt-2">
-              <Text className="text-sm text-blue-500">
-                {buddy.yourChildName}&apos;s Buddy
-              </Text>
-              <View className="ml-2">
-                <Text className="text-sm text-gray-500">
-                  {buddy.phoneNumber}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-row w-full items-center justify-between mt-2">
-              <Text className="text-sm text-green-500">
-                {buddy.parentName}&apos;s Child
-              </Text>
-              <View className="ml-2">
-                <Text className="text-sm text-gray-500">
-                  {buddy.parentPhoneNumber}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-1 flex-row justify-between w-full mt-4">
-              <TouchableOpacity
-                className="bg-redsh px-4 py-2 rounded-lg"
-                onPress={() => {
-                  console.log("Reject Buddy Request");
-                }}
-              >
-                <Text className="text-white">Reject</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="bg-greensh px-4 py-2 rounded-lg"
-                onPress={() => {
-                  // Handle reject action here
-                  console.log("Confirm Buddy Request");
-                }}
-              >
-                <Text className="text-white">Confirms</Text>
-              </TouchableOpacity>
-            </View>
+        {/* Incoming Requests — SHOWS bus number + nickname + child + parent */}
+        <View className="mt-8">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xl font-medium">New Buddy Requests</Text>
+            {loadingIncoming ? <ActivityIndicator /> : null}
           </View>
-        ))}
-        <Text className="text-xl font-light mt-4">Find a Buddy</Text>
-        <View className="flex-col items-center mt-4rounded-lg shadow-sm w-full">
-          {newBuddies.map((buddy: Buddy, index: number) => (
-            <View
-              key={index}
-              className="flex-col items-center mt-4 bg-white p-4 rounded-lg shadow-sm w-full"
-            >
-              <View className="flex-1 w-full items-start gap-2 mt-2 flex-row">
-                <Image
-                  source={buddy.image}
-                  className="w-12 h-12 rounded-full"
-                />
 
-                <View className="ml-4 flex-1 items-start justify-start flex-col">
-                  <View className="flex-row items-center w-full justify-between">
-                    <Text className="text-lg font-semibold mb-[-4px]">
-                      {buddy.name}
-                    </Text>
+          {loadingIncoming ? (
+            <SkeletonRow />
+          ) : incoming.length === 0 ? (
+            <View className="w-full items-start justify-center py-4">
+              <Text className="text-gray-500">No new requests.</Text>
+            </View>
+          ) : (
+            incoming.map((l) => {
+              const fallbackPeerChildUid =
+                selectedChildUid && l.childUids[0] === selectedChildUid
+                  ? l.childUids[1]
+                  : l.childUids[0];
+
+              const childName = l.requesterChildName || fallbackPeerChildUid;
+              const parentName = l.requesterParentName || l.requesterParentUid;
+
+              const busText =
+                (l.busNumber
+                  ? `Bus ${l.busNumber}`
+                  : l.busId
+                    ? `Bus ${l.busId}`
+                    : "Bus —") + (l.busNickname ? ` • ${l.busNickname}` : "");
+
+              return (
+                <View
+                  key={l.id}
+                  className="flex-col items-center mt-3 bg-white p-4 rounded-lg shadow-sm w-full"
+                >
+                  <View className="w-full flex-row items-start justify-between">
+                    <View className="flex-row items-center gap-3">
+                      <Image
+                        source={images.childImage1}
+                        className="w-12 h-12 rounded-full"
+                      />
+                      <View>
+                        <Text className="text-base font-semibold">
+                          Request to pair with: {childName}
+                        </Text>
+                        <Text className="text-gray-700 text-sm mt-0.5">
+                          Parent: {parentName}
+                        </Text>
+                        <Text className="text-gray-500 text-xs mt-0.5">
+                          {busText}
+                        </Text>
+                      </View>
+                    </View>
+                    <Badge text="Pending" tone="blue" />
+                  </View>
+
+                  <View className="flex-row w-full justify-end gap-2 mt-3">
+                    <TouchableOpacity
+                      className={`px-4 py-2 rounded-lg ${respondingId === l.id ? "bg-red-600/70" : "bg-red-600"}`}
+                      onPress={() => respond(l.id, false)}
+                      disabled={respondingId === l.id}
+                      activeOpacity={0.85}
+                    >
+                      {respondingId === l.id ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-white">Reject</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className={`px-4 py-2 rounded-lg ${respondingId === l.id ? "bg-green-600/70" : "bg-green-600"}`}
+                      onPress={() => respond(l.id, true)}
+                      disabled={respondingId === l.id}
+                      activeOpacity={0.85}
+                    >
+                      {respondingId === l.id ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-white">Confirm</Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-              <View className="flex-row w-full items-center justify-between mt-2">
-                <Text className="text-sm text-blue-500">
-                  {buddy.yourChildName}&apos;s Buddy
-                </Text>
-                <View className="ml-2">
-                  <Text className="text-sm text-gray-500">
-                    {buddy.phoneNumber}
-                  </Text>
-                </View>
-              </View>
-              <View className="flex-row w-full items-center justify-between mt-2">
-                <Text className="text-sm text-green-500">
-                  {buddy.parentName}&apos;s Child
-                </Text>
-                <View className="ml-2">
-                  <Text className="text-sm text-gray-500">
-                    {buddy.parentPhoneNumber}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                className="bg-blue-500 px-4 py-4 rounded-lg mt-4 w-full"
-                onPress={() => {
-                  handleOpenModal(buddy); // Open modal with the selected buddy
-                  console.log("Send Buddy Request for", buddy.name);
-                }}
-              >
-                <Text className="text-white text-center">Send Request</Text>
-              </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+        {/* Find a Buddy */}
+        <View className="mt-8">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xl font-medium">Find a Buddy</Text>
+            {loadingPeers ? <ActivityIndicator /> : null}
+          </View>
+
+          {loadingPeers ? (
+            <>
+              <SkeletonRow />
+              <SkeletonRow />
+            </>
+          ) : peers.length === 0 ? (
+            <View className="w-full items-start justify-center py-4">
+              <Text className="text-gray-500">No peers on this bus yet.</Text>
             </View>
-          ))}
+          ) : (
+            peers.map((p) => {
+              const already = pendingWithChild.has(p.uid);
+              return (
+                <View
+                  key={p.uid}
+                  className="flex-col items-center mt-3 bg-white p-4 rounded-lg shadow-sm w-full"
+                >
+                  <View className="flex-row items-center w-full justify-between">
+                    <View className="flex-row items-center gap-3">
+                      <Image
+                        source={images.childImage1}
+                        className="w-12 h-12 rounded-full"
+                      />
+                      <View>
+                        <Text className="text-base font-semibold">
+                          {p.fullName ?? p.uid}
+                        </Text>
+                        <Text className="text-gray-500 text-xs">
+                          {p.parentUid ? "Parent linked" : "No parent linked"}
+                        </Text>
+                      </View>
+                    </View>
+                    {already ? (
+                      <Badge text="Requested/Active" tone="gray" />
+                    ) : (
+                      <TouchableOpacity
+                        className="bg-blue-600 px-4 py-2 rounded-lg"
+                        onPress={() => openSendModal(p)}
+                        activeOpacity={0.85}
+                      >
+                        <Text className="text-white">Send Request</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
       </ScrollView>
+
+      {/* Send request modal */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={isModalVisible}
-        onRequestClose={handleCloseModal}
+        onRequestClose={closeSendModal}
       >
-        <View className="flex-1 justify-center items-center bg-black/50">
-          <View className="bg-white p-4 rounded-lg shadow-lg">
+        <View className="flex-1 justify-center items-center bg-black/50 p-4">
+          <View className="bg-white p-4 rounded-2xl w-full max-w-md">
             <Text className="text-lg font-semibold mb-2">
               Send Buddy Request
             </Text>
-            {selectedBuddy && (
-              <Text className="text-sm text-gray-500 mb-4">
-                Are you sure you want to send a buddy request to{" "}
-                {selectedBuddy.name}?
-              </Text>
-            )}
-            <View className="flex-col items-center mb-4 w-full">
-              {yourChild.map((yourChild: child, index: number) => (
-                <TouchableOpacity
-                  key={index}
-                  className={`flex-row items-center mb-2 bg-blue-100 py-2 px-4 rounded-lg w-full ${
-                    selectedChild && selectedChild.childId === yourChild.childId
-                      ? "border border-blue-500" // Changed from border-1 to border
-                      : ""
-                  }`}
-                  onPress={() => {
-                    setSelectedChild(yourChild); // Set selected child on press
-                  }}
-                >
-                  <Image
-                    source={yourChild.childimage}
-                    className="w-12 h-12 rounded-full"
-                  />
-                  <Text className="ml-4">{yourChild.childname}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View className="flex-row justify-end">
+            <Text className="text-gray-600 mb-4">
+              {pendingPeer
+                ? `Send a request to pair with ${pendingPeer.fullName ?? pendingPeer.uid}?`
+                : ""}
+            </Text>
+            <View className="flex-row justify-end gap-2">
               <TouchableOpacity
-                className="bg-red-500 px-4 py-2 rounded-lg"
-                onPress={handleCloseModal}
+                className="bg-gray-500 px-4 py-2 rounded-lg"
+                onPress={closeSendModal}
               >
                 <Text className="text-white">Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="bg-blue-500 px-4 py-2 rounded-lg ml-2"
-                onPress={() => {
-                  console.log("Confirm Buddy Request");
-                  handleCloseModal();
-                }}
+                className={`px-4 py-2 rounded-lg ${sending ? "bg-blue-600/70" : "bg-blue-600"}`}
+                onPress={confirmSend}
+                disabled={sending}
               >
-                <Text className="text-white">Confirm</Text>
+                {sending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white">Send</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

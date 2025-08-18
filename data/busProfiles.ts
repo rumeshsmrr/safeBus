@@ -184,3 +184,22 @@ export async function resolveBusDocId(anyId: string): Promise<string | null> {
 
   return null;
 }
+
+/* =========================
+   NEW: Minimal bus meta helper
+   ========================= */
+export async function getBusMeta(
+  busIdOrDocId: string
+): Promise<{ busNumber: string | null; busNickname: string | null } | null> {
+  if (!busIdOrDocId) return null;
+
+  // Try as doc id; if not, resolve via "busId" field.
+  const resolvedId = (await resolveBusDocId(busIdOrDocId)) ?? busIdOrDocId;
+  const prof = await getBusProfileById(resolvedId);
+  if (!prof) return null;
+
+  return {
+    busNumber: prof.busNumber ?? null,
+    busNickname: prof.busNickName ?? null,
+  };
+}
