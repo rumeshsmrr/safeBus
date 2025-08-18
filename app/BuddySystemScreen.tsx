@@ -26,6 +26,11 @@ import {
 
 import type { BuddyLinkDoc, PeerStudent } from "@/types/buddy";
 
+import { db } from "@/app/lib/firebase";
+import { getBusMeta } from "@/data/busProfiles";
+import { getDisplayName } from "@/data/users";
+import { doc, getDoc } from "firebase/firestore";
+
 const scrollViewBottomPadding = 24;
 
 const Chip = ({
@@ -80,6 +85,8 @@ const SkeletonRow = () => (
   </View>
 );
 
+type BusMeta = { busNumber: string | null; busNickname: string | null };
+
 const BuddySystemScreen = () => {
   // Children of current parent
   const [kids, setKids] = useState<PeerStudent[]>([]);
@@ -105,6 +112,10 @@ const BuddySystemScreen = () => {
   const [sending, setSending] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  // Fallback caches (names + bus meta) when denormalized fields missing
+  const [nameCache, setNameCache] = useState<Record<string, string>>({});
+  const [busCache, setBusCache] = useState<Record<string, BusMeta>>({});
 
   // Subscribe my children
   useEffect(() => {
@@ -178,6 +189,89 @@ const BuddySystemScreen = () => {
     return s;
   }, [childBuddyLinks, selectedChildUid]);
 
+  // --------- Fallback hydration: fetch names/bus meta when missing ----------
+  useEffect(() => {
+    // gather missing child UIDs to resolve names
+    const needChildNames = new Set<string>();
+    const needParentNames = new Set<string>();
+    const needBusIds = new Set<string>();
+
+    const considerLink = (l: BuddyLinkDoc) => {
+      // child names
+      if (!l.requesterChildName) {
+        l.childUids.forEach((uid) => {
+          if (!nameCache[uid]) needChildNames.add(uid);
+        });
+      }
+      // parent names
+      if (!l.requesterParentName && !nameCache[l.requesterParentUid]) {
+        needParentNames.add(l.requesterParentUid);
+      }
+      if (!l.requestedParentName && !nameCache[l.requestedParentUid]) {
+        needParentNames.add(l.requestedParentUid);
+      }
+      // bus meta
+      if (l.busId && !(l.busId in busCache) && !l.busNumber && !l.busNickname) {
+        needBusIds.add(l.busId);
+      }
+    };
+
+    incoming.forEach(considerLink);
+    activeBuddies.forEach(considerLink);
+
+    if (needChildNames.size + needParentNames.size + needBusIds.size === 0)
+      return;
+
+    (async () => {
+      const newNames: Record<string, string> = {};
+      const newBus: Record<string, BusMeta> = {};
+
+      // Fetch child full names
+      await Promise.all(
+        Array.from(needChildNames).map(async (uid) => {
+          try {
+            const snap = await getDoc(doc(db, "users", uid));
+            const d: any = snap.data();
+            newNames[uid] = d?.fullName || uid;
+          } catch {
+            newNames[uid] = uid;
+          }
+        })
+      );
+
+      // Fetch parent display names (use helper that already handles fallbacks)
+      await Promise.all(
+        Array.from(needParentNames).map(async (uid) => {
+          try {
+            const dn = await getDisplayName(uid);
+            newNames[uid] = dn || uid;
+          } catch {
+            newNames[uid] = uid;
+          }
+        })
+      );
+
+      // Fetch bus meta
+      await Promise.all(
+        Array.from(needBusIds).map(async (busId) => {
+          try {
+            const meta = await getBusMeta(busId);
+            newBus[busId] = {
+              busNumber: meta?.busNumber ?? null,
+              busNickname: meta?.busNickname ?? null,
+            };
+          } catch {
+            newBus[busId] = { busNumber: null, busNickname: null };
+          }
+        })
+      );
+
+      // Commit caches (merge)
+      setNameCache((prev) => ({ ...prev, ...newNames }));
+      setBusCache((prev) => ({ ...prev, ...newBus }));
+    })();
+  }, [incoming, activeBuddies, nameCache, busCache]);
+
   // Actions
   function openSendModal(peer: PeerStudent) {
     setPendingPeer(peer);
@@ -220,6 +314,18 @@ const BuddySystemScreen = () => {
       setRespondingId(null);
     }
   }
+
+  console.log("BuddySystemScreen render", {
+    kids,
+    selectedChildUid,
+    links,
+    incoming,
+    peers,
+    activeBuddies,
+    pendingWithChild,
+    nameCache,
+    busCache,
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-light-100 py-9">
@@ -273,6 +379,27 @@ const BuddySystemScreen = () => {
                 selectedChildUid && l.childUids[0] === selectedChildUid
                   ? l.childUids[1]
                   : l.childUids[0];
+
+              const displayChild =
+                l.requestedChildName ||
+                l.requesterChildName ||
+                nameCache[peerChildUid] ||
+                peerChildUid;
+
+              const busMeta: BusMeta | undefined =
+                l.busNumber || l.busNickname
+                  ? {
+                      busNumber: l.busNumber ?? null,
+                      busNickname: l.busNickname ?? null,
+                    }
+                  : l.busId
+                    ? busCache[l.busId]
+                    : undefined;
+
+              const busText =
+                (busMeta?.busNumber ? `Bus ${busMeta.busNumber}` : "Bus —") +
+                (busMeta?.busNickname ? ` • ${busMeta.busNickname}` : "");
+
               return (
                 <View
                   key={l.id}
@@ -286,15 +413,9 @@ const BuddySystemScreen = () => {
                       />
                       <View>
                         <Text className="text-base font-semibold">
-                          Buddy child:{" "}
-                          {l.requestedChildName ||
-                            l.requesterChildName ||
-                            peerChildUid}
+                          Buddy child: {displayChild}
                         </Text>
-                        <Text className="text-gray-500 text-xs">
-                          {l.busNumber ? `Bus ${l.busNumber}` : "Bus —"}
-                          {l.busNickname ? ` • ${l.busNickname}` : ""}
-                        </Text>
+                        <Text className="text-gray-500 text-xs">{busText}</Text>
                       </View>
                     </View>
                     <Badge
@@ -325,7 +446,7 @@ const BuddySystemScreen = () => {
           )}
         </View>
 
-        {/* Incoming Requests — SHOWS bus number + nickname + child + parent */}
+        {/* Incoming Requests — shows bus number + nickname + child + parent */}
         <View className="mt-8">
           <View className="flex-row items-center justify-between">
             <Text className="text-xl font-medium">New Buddy Requests</Text>
@@ -345,15 +466,33 @@ const BuddySystemScreen = () => {
                   ? l.childUids[1]
                   : l.childUids[0];
 
-              const childName = l.requesterChildName || fallbackPeerChildUid;
-              const parentName = l.requesterParentName || l.requesterParentUid;
+              const childName =
+                l.requesterChildName ||
+                nameCache[fallbackPeerChildUid] ||
+                fallbackPeerChildUid;
+
+              const parentName =
+                l.requesterParentName ||
+                nameCache[l.requesterParentUid] ||
+                l.requesterParentUid;
+
+              const busMeta: BusMeta | undefined =
+                l.busNumber || l.busNickname
+                  ? {
+                      busNumber: l.busNumber ?? null,
+                      busNickname: l.busNickname ?? null,
+                    }
+                  : l.busId
+                    ? busCache[l.busId]
+                    : undefined;
 
               const busText =
-                (l.busNumber
-                  ? `Bus ${l.busNumber}`
+                (busMeta?.busNumber
+                  ? `Bus ${busMeta.busNumber}`
                   : l.busId
                     ? `Bus ${l.busId}`
-                    : "Bus —") + (l.busNickname ? ` • ${l.busNickname}` : "");
+                    : "Bus —") +
+                (busMeta?.busNickname ? ` • ${busMeta.busNickname}` : "");
 
               return (
                 <View
