@@ -8,6 +8,7 @@ import copy from "@/assets/icons/copy.png";
 import edit from "@/assets/icons/edit.png";
 import home from "@/assets/icons/home.png";
 import homeLocationIcon from "@/assets/icons/homeLocationIcon.png";
+import lost from "@/assets/icons/lost.png";
 import notification from "@/assets/icons/notification.png";
 import person from "@/assets/icons/person.png";
 import play from "@/assets/icons/play.png";
@@ -36,4 +37,5 @@ export const icons = {
   back,
   calender,
   buddy,
+  lost,
 };

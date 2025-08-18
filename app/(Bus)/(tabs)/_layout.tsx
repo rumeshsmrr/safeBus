@@ -70,6 +70,16 @@ const _layout = () => {
         }}
       />
       <Tabs.Screen
+        name="DriverLostManagerScreen"
+        options={{
+          title: "Lost & Found",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.lost} title="Lost & Found" />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Driver Profile",

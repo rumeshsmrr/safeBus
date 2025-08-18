@@ -60,7 +60,10 @@ export default function RootLayout() {
             name="(Bus)/(tabs)/BusJoinRequests"
             options={{ headerShown: false }}
           />
-
+          <Stack.Screen
+            name="(Bus)/(tabs)/DriverLostManagerScreen"
+            options={{ headerShown: false }}
+          />
           {/* Route Groups - These have their own _layout.tsx files */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(Bus)/(tabs)" options={{ headerShown: false }} />

@@ -32,7 +32,7 @@ import MapView, {
 } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { db } from "@/app/lib/firebase";
+import { auth, db } from "@/app/lib/firebase";
 import { images } from "@/constants/images";
 import { getApprovedBusForChild } from "@/data/busChildren";
 import {
@@ -40,6 +40,11 @@ import {
   subscribeBusProfileById,
   type BusProfile,
 } from "@/data/busProfiles";
+import {
+  acknowledgeEmergency,
+  subscribeEmergencyAlertsForParent,
+  type EmergencyAlert,
+} from "@/data/emergency";
 import { dateKeyFor, type TourSession, type TourStatus } from "@/data/tours";
 import { subscribeMyChildren } from "@/data/users";
 import type { UserDoc as BaseUserDoc } from "@/types/user";
@@ -443,6 +448,20 @@ const ParentHome = () => {
     setContactVisible(false);
   };
 
+  // state
+  const [emergencies, setEmergencies] = useState<EmergencyAlert[]>([]);
+
+  // after you know the logged-in parent uid (e.g., auth.currentUser?.uid or from profile)
+  // mount the subscription (do this where you mount other parent listeners):
+  useEffect(() => {
+    const parentUid = auth.currentUser?.uid; // or however you get parent uid
+    if (!parentUid) return;
+    const unsub = subscribeEmergencyAlertsForParent(parentUid, (rows) => {
+      setEmergencies(rows);
+    });
+    return () => unsub?.();
+  }, []);
+
   const FIXED_FOOTER_HEIGHT = 120;
   const TAB_BAR_HEIGHT = 70;
   const TAB_BAR_BOTTOM_MARGIN = 36;
@@ -717,6 +736,45 @@ const ParentHome = () => {
         }
       >
         <Header isCode />
+
+        {emergencies.some((e) => e.status === "NEW") && (
+          <View className="mt-3 bg-red-50 border border-red-200 rounded-xl p-12">
+            {emergencies
+              .filter((e) => e.status === "NEW")
+              .slice(0, 1)
+              .map((e) => (
+                <View key={e.id}>
+                  <Text className="text-red-700 font-semibold text-lg">
+                    Emergency from {e.childName || "Child"}
+                  </Text>
+                  <Text className="text-red-700 mt-1">
+                    {e.loc ? `Location shared` : `No location attached`}
+                  </Text>
+                  <View className="flex-row mt-3">
+                    {e.loc && (
+                      <TouchableOpacity
+                        className="mr-2 px-3 py-2 rounded-lg bg-blue-600"
+                        onPress={() =>
+                          openSystemMaps(
+                            { latitude: e.loc!.lat, longitude: e.loc!.lng },
+                            e.childName || "Child"
+                          )
+                        }
+                      >
+                        <Text className="text-white">Open in Maps</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      className="px-3 py-2 rounded-lg bg-neutral-200"
+                      onPress={() => e.id && acknowledgeEmergency(e.id)}
+                    >
+                      <Text>Acknowledge</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+          </View>
+        )}
 
         {/* Loading / Empty */}
         {loading && (

@@ -10,6 +10,7 @@ import {
 import { dateKeyFor, type TourSession, type TourStatus } from "@/data/tours";
 import { getUserById } from "@/data/users";
 
+import { createEmergencyAlert } from "@/data/emergency";
 import type { UserDoc as BaseUserDoc } from "@/types/user";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { collection, doc, onSnapshot } from "firebase/firestore";
@@ -135,6 +136,39 @@ const ChildHome = () => {
     () => (new Date().getHours() < 12 ? "morning" : "evening"),
     []
   );
+
+  const [sendingSOS, setSendingSOS] = useState(false);
+  async function onEmergencyHold() {
+    if (!child?.uid || !parent?.uid) {
+      alert("Missing parent/child link.");
+      return;
+    }
+    if (sendingSOS) return;
+    try {
+      setSendingSOS(true);
+      await createEmergencyAlert({
+        childUid: child.uid,
+        parentUid: parent.uid,
+        childName: childDisplayName,
+        loc:
+          liveLoc?.lat && liveLoc?.lng
+            ? {
+                lat: liveLoc.lat,
+                lng: liveLoc.lng,
+                accuracy: liveLoc.accuracy ?? null,
+              }
+            : null,
+        message: null,
+      });
+      // Optional: small confirmation toast/alert
+      console.log("Emergency alert sent");
+    } catch (e: any) {
+      console.log("Emergency send failed:", e);
+      alert(e?.message ?? "Failed to send emergency alert.");
+    } finally {
+      setSendingSOS(false);
+    }
+  }
 
   /* Load child (AsyncStorage -> auth fallback) */
   const fetchChildData = async (userID: string) => {
@@ -509,14 +543,21 @@ const ChildHome = () => {
 
         {/* Emergency big button */}
         <View className="mt-6 w-full items-center">
-          <TouchableOpacity
-            className="w-full h-[300px] rounded-xl bg-redsh gap-2 text-darkbg flex-1 justify-center items-center"
-            onLongPress={() => console.log("Emergency Button Pressed")}
-            activeOpacity={0.7}
-          >
-            <Text className="text-5xl font-light h-12">Emergency</Text>
-            <Text className="text-lg font-light">Press and Hold</Text>
-          </TouchableOpacity>
+          {/* Emergency big button */}
+          <View className="mt-6 w-full items-center">
+            <TouchableOpacity
+              className={`w-full h-[300px] rounded-xl ${sendingSOS ? "bg-neutral-400" : "bg-redsh"} gap-2 text-darkbg flex-1 justify-center items-center`}
+              onLongPress={onEmergencyHold}
+              delayLongPress={800} // require press-and-hold (~0.8s)
+              disabled={sendingSOS}
+              activeOpacity={0.7}
+            >
+              <Text className="text-5xl font-light h-12">
+                {sendingSOS ? "Sending…" : "Emergency"}
+              </Text>
+              <Text className="text-lg font-light">Press and Hold</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Actions */}
