@@ -38,7 +38,51 @@ interface SignUpState {
   password: string;
   confirmPassword: string;
   role: Role;
+  contactNumber: string; // NEW: parent’s number (required)
+  trustedContactNumber: string; // NEW: trusted person’s number (optional)
 }
+
+const EyeIcon = ({ visible }: { visible: boolean }) => (
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    {visible ? (
+      <Path
+        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+        stroke="#666"
+        strokeWidth="2"
+      />
+    ) : (
+      <>
+        <Path
+          d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+          stroke="#666"
+          strokeWidth="2"
+        />
+        <Path d="M2 2l20 20" stroke="#666" strokeWidth="2" />
+      </>
+    )}
+    {visible && (
+      <Path
+        d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
+        stroke="#666"
+        strokeWidth="2"
+      />
+    )}
+  </Svg>
+);
+
+// ---------- Phone helpers (SL default -> E.164) ----------
+const normalizePhone = (raw: string) => {
+  let p = raw.replace(/[^\d+]/g, ""); // keep digits and +
+  if (p.startsWith("0")) {
+    p = "+94" + p.slice(1);
+  }
+  if (!p.startsWith("+")) {
+    p = "+" + p;
+  }
+  return p;
+};
+const isValidE164 = (phone: string) => /^\+[1-9]\d{7,14}$/.test(phone);
+// --------------------------------------------------------
 
 const ParentSignUp: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -52,35 +96,9 @@ const ParentSignUp: React.FC = () => {
     password: "",
     confirmPassword: "",
     role: "parent",
+    contactNumber: "", // NEW
+    trustedContactNumber: "", // NEW
   });
-
-  const EyeIcon = ({ visible }: { visible: boolean }) => (
-    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      {visible ? (
-        <Path
-          d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-          stroke="#666"
-          strokeWidth="2"
-        />
-      ) : (
-        <>
-          <Path
-            d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-            stroke="#666"
-            strokeWidth="2"
-          />
-          <Path d="M2 2l20 20" stroke="#666" strokeWidth="2" />
-        </>
-      )}
-      {visible && (
-        <Path
-          d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
-          stroke="#666"
-          strokeWidth="2"
-        />
-      )}
-    </Svg>
-  );
 
   // ---- 6-digit code helpers ----
   const gen6 = () =>
@@ -100,11 +118,17 @@ const ParentSignUp: React.FC = () => {
 
   const handleSignUp = async () => {
     // Basic validation
-    if (!user.firstName || !user.lastName || !user.email || !user.password) {
+    if (
+      !user.firstName ||
+      !user.lastName ||
+      !user.email ||
+      !user.password ||
+      !user.contactNumber // parent phone required
+    ) {
       Dialog.show({
         type: ALERT_TYPE.DANGER,
         title: "Missing info",
-        textBody: "Please fill in all fields.",
+        textBody: "Please fill in all fields, including your contact number.",
         button: "close",
       });
       return;
@@ -141,8 +165,63 @@ const ParentSignUp: React.FC = () => {
       return;
     }
 
+    // Phone validation
+    const contactE164 = normalizePhone(user.contactNumber);
+    if (!isValidE164(contactE164)) {
+      Dialog.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Invalid phone number",
+        textBody: "Enter a valid phone (e.g., 0771234567 or +94771234567).",
+        button: "close",
+      });
+      return;
+    }
+
+    let trustedE164: string | null = null;
+    if (user.trustedContactNumber.trim().length > 0) {
+      trustedE164 = normalizePhone(user.trustedContactNumber);
+      if (!isValidE164(trustedE164)) {
+        Dialog.show({
+          type: ALERT_TYPE.DANGER,
+          title: "Invalid trusted number",
+          textBody:
+            "Enter a valid trusted contact (e.g., 0771234567 or +94771234567), or leave it blank.",
+          button: "close",
+        });
+        return;
+      }
+      // prevent using the same number for both fields
+      if (trustedE164 === contactE164) {
+        Dialog.show({
+          type: ALERT_TYPE.DANGER,
+          title: "Duplicate numbers",
+          textBody: "Your trusted contact must be different from your number.",
+          button: "close",
+        });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
+
+      // Optional: ensure parent contact number isn't already used
+      const dupSnap = await getDocs(
+        query(
+          collection(db, "users"),
+          where("contactNumber", "==", contactE164)
+        )
+      );
+      if (!dupSnap.empty) {
+        Dialog.show({
+          type: ALERT_TYPE.DANGER,
+          title: "Contact already in use",
+          textBody:
+            "This phone number is already registered with another account.",
+          button: "close",
+        });
+        return;
+      }
 
       // Create auth user
       const cred = await createUserWithEmailAndPassword(
@@ -167,18 +246,16 @@ const ParentSignUp: React.FC = () => {
         firstName: user.firstName.trim(),
         lastName: user.lastName.trim(),
         role: "parent",
-        parentCode, // 👈 6-digit code stored here
+        parentCode, // 6-digit code
+        contactNumber: contactE164, // NEW
+        trustedContactNumber: trustedE164, // NEW (nullable)
+        phoneVerified: false, // for future OTP flow
+        trustedPhoneVerified: false, // for future OTP flow
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Success",
-        textBody: `Account created. Your code: ${parentCode}`,
-      });
-
-      //store all saved user details with parent code, without password
+      // Local snapshot (avoid serverTimestamp in AsyncStorage)
       await AsyncStorage.setItem(
         "user",
         JSON.stringify({
@@ -188,11 +265,19 @@ const ParentSignUp: React.FC = () => {
           firstName: user.firstName.trim(),
           lastName: user.lastName.trim(),
           role: "parent",
-          parentCode, // 👈 6-digit code stored here
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          parentCode,
+          contactNumber: contactE164,
+          trustedContactNumber: trustedE164,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         })
       );
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: `Account created. Your code: ${parentCode}`,
+      });
 
       // Reset local state
       setUser({
@@ -202,6 +287,8 @@ const ParentSignUp: React.FC = () => {
         password: "",
         confirmPassword: "",
         role: "parent",
+        contactNumber: "",
+        trustedContactNumber: "",
       });
 
       // Navigate
@@ -280,6 +367,38 @@ const ParentSignUp: React.FC = () => {
               returnKeyType="next"
             />
 
+            {/* Parent Contact Number (required) */}
+            <Text className="text-xl font-medium text-darkbg mb-2 mt-4">
+              Your Contact Number
+            </Text>
+            <TextInput
+              className="bg-white rounded-full p-4 w-full"
+              placeholder="e.g., 0771234567 or +94771234567"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              value={user.contactNumber}
+              onChangeText={(t) => setUser((p) => ({ ...p, contactNumber: t }))}
+              returnKeyType="next"
+            />
+
+            {/* Trusted Person’s Contact (optional) */}
+            <Text className="text-xl font-medium text-darkbg mb-2 mt-4">
+              Trusted Person’s Number (Optional)
+            </Text>
+            <TextInput
+              className="bg-white rounded-full p-4 w-full"
+              placeholder="e.g., 0771234567 or +94771234567"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              value={user.trustedContactNumber}
+              onChangeText={(t) =>
+                setUser((p) => ({ ...p, trustedContactNumber: t }))
+              }
+              returnKeyType="next"
+            />
+
             {/* Password */}
             <Text className="text-xl font-medium text-darkbg mb-2 mt-4">
               Password
@@ -327,7 +446,9 @@ const ParentSignUp: React.FC = () => {
             {/* Submit */}
             <View className="mt-6 w-full">
               <TouchableOpacity
-                className={`rounded-full p-4 items-center ${loading ? "bg-neutral-300" : "bg-primary"}`}
+                className={`rounded-full p-4 items-center ${
+                  loading ? "bg-neutral-300" : "bg-primary"
+                }`}
                 onPress={handleSignUp}
                 disabled={loading}
               >
