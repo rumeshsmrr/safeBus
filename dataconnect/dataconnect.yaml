@@ -1,0 +1,12 @@
+specVersion: "v1"
+serviceId: "safeBus"
+location: "asia-south1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "safebus-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]
