@@ -16,7 +16,9 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to help you pick start and end points on the map.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to share your trip safely with your parent.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -60,7 +62,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU"
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDZthrLZxOUbCW7pJNFi-AtGN-qTIwJnNU",
+      "router": {},
+      "eas": {
+        "projectId": "b727d1a1-4bdc-4333-8547-526dc506022b"
+      }
     }
   }
 }

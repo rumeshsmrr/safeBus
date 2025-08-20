@@ -379,7 +379,7 @@ const BusDetails = () => {
           </Card>
         </View>
 
-        {/* Driver list (kept) */}
+        {/* Driver list (kept)
         <View className="mt-6">
           <Text className="text-xl font-semibold text-neutral-900 mb-2">
             Driver List
@@ -432,7 +432,7 @@ const BusDetails = () => {
               <Text className="text-white font-semibold">Rate Driver</Text>
             </TouchableOpacity>
           </Card>
-        </View>
+        </View> */}
 
         {/* Add Child CTA */}
         <View className="mt-6 mb-2">
@@ -549,7 +549,7 @@ const BusDetails = () => {
         </View>
       </Modal>
 
-      {/* Rate Driver Modal */}
+      {/* Rate Driver Modal
       <Modal
         animationType="slide"
         transparent
@@ -655,7 +655,7 @@ const BusDetails = () => {
             </View>
           </View>
         </View>
-      </Modal>
+      </Modal> */}
 
       {/* Rate Bus Modal */}
       <Modal
